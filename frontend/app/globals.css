@@ -1,16 +1,32 @@
 :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0b0d0c; color: #f5f7f4; }
 * { box-sizing: border-box; }
-body { margin: 0; background: radial-gradient(circle at 80% 15%, #263329 0, #0b0d0c 38%); }
-main { max-width: 1180px; min-height: 100vh; margin: auto; padding: 0 28px 64px; }
+body { margin: 0; background: radial-gradient(circle at 82% 8%, #263329 0, #0b0d0c 34%); }
+button, input, select { font: inherit; }
+main { max-width: 1180px; min-height: 100vh; margin: auto; padding: 0 28px 80px; }
 nav { height: 82px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2c332e; }
 nav strong { font-size: 1.2rem; letter-spacing: -.03em; } nav span { color: #aab0ab; font-size: .9rem; }
-header { max-width: 760px; padding: 15vh 0 10vh; }
-.eyebrow { color: #b8ff55; font-size: .78rem; font-weight: 800; letter-spacing: .18em; }
-h1 { margin: 18px 0 24px; font-size: clamp(3.4rem, 8vw, 7rem); line-height: .9; letter-spacing: -.065em; }
-.intro { max-width: 590px; color: #b8bdb9; font-size: 1.2rem; line-height: 1.6; }
-button { margin-top: 22px; padding: 15px 22px; border: 0; border-radius: 4px; background: #b8ff55; color: #11150f; font-weight: 800; }
-section { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #2c332e; }
-article { display: flex; flex-direction: column; gap: 8px; padding: 28px 0; }
-article b { font-size: 1.8rem; } article span { color: #8e9690; font-size: .85rem; }
-@media (max-width: 680px) { nav span { display: none; } section { grid-template-columns: 1fr; } header { padding-top: 12vh; } }
+header { max-width: 860px; padding: 10vh 0 7vh; }
+.eyebrow, .step { color: #b8ff55; font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
+h1 { margin: 18px 0 24px; font-size: clamp(3.2rem, 7vw, 6.5rem); line-height: .9; letter-spacing: -.065em; }
+.intro { max-width: 620px; color: #b8bdb9; font-size: 1.15rem; line-height: 1.6; }
+.workspace { display: grid; grid-template-columns: minmax(250px, .7fr) minmax(520px, 1.5fr); gap: 18px; align-items: start; }
+.panel { border: 1px solid #2c332e; background: rgba(17, 20, 18, .88); padding: 26px; }
+.panel h2 { margin: 8px 0 24px; font-size: 1.6rem; letter-spacing: -.03em; }
+form, label { display: flex; flex-direction: column; gap: 8px; }
+form { gap: 18px; } label { color: #959c97; font-size: .75rem; font-weight: 700; }
+input, select { width: 100%; border: 1px solid #384039; border-radius: 3px; background: #0e110f; color: #f5f7f4; padding: 12px; outline: none; }
+input:focus, select:focus { border-color: #b8ff55; box-shadow: 0 0 0 2px rgba(184, 255, 85, .12); }
+button { align-self: flex-start; padding: 13px 18px; border: 0; border-radius: 3px; background: #b8ff55; color: #11150f; font-weight: 800; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .4; }
+.hint { color: #747b75; font-size: .8rem; }
+.formRow { display: grid; grid-template-columns: 1fr 180px; gap: 12px; }
+.setHeader, .actions { display: flex; align-items: center; justify-content: space-between; }
+.setHeader { padding-top: 8px; color: #959c97; font-size: .82rem; }.setHeader b { color: #b8ff55; }
+.setRow { display: grid; grid-template-columns: 28px minmax(150px, 1fr) 80px 70px 70px 30px; gap: 8px; align-items: end; }
+.setNumber { align-self: center; color: #727873; font-weight: 800; }
+.iconButton { align-self: end; padding: 11px 0; width: 30px; background: transparent; color: #9ca29d; font-size: 1.25rem; }
+.secondary { background: #242a25; color: #dce1dc; }
+.message { grid-column: 1 / -1; margin: 0; padding: 14px 18px; border-left: 3px solid #b8ff55; background: #171c18; color: #dce1dc; }
+@media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } .setRow { grid-template-columns: 28px 1fr 80px 70px; }.setRow label:nth-of-type(4) { grid-column: 2; } }
+@media (max-width: 600px) { nav span { display: none; } header { padding-top: 8vh; }.formRow { grid-template-columns: 1fr; }.setRow { grid-template-columns: 24px 1fr 1fr; }.setRow label:first-of-type { grid-column: 2 / -1; }.actions { gap: 12px; } }
 

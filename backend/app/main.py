@@ -2,6 +2,7 @@ from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api import router as api_router
 from app.config import get_settings
 from app.db import engine
 
@@ -14,9 +15,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(api_router)
 
 
-@app.get("/api/v1")
+@app.get("/api/v1", tags=["system"])
 def api_root() -> dict[str, str]:
     return {"name": "Athletica Log API", "version": app.version}
 
@@ -35,4 +37,3 @@ def readiness(response: Response) -> dict[str, str]:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"status": "not ready"}
     return {"status": "ready"}
-

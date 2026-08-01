@@ -38,6 +38,10 @@ Anschließend:
 
 ## Aktueller Umfang
 
-Das Projekt enthält zunächst ein professionelles Grundgerüst und ein erstes Domänenmodell.
-Anmeldung, echte Datenerfassung und Diagramme werden in kleinen, testbaren Schritten ergänzt.
+Das Projekt enthält ein professionelles Grundgerüst und den ersten durchgängigen MVP-Schnitt:
+Übungen können angelegt und Trainingseinheiten mit mehreren Sätzen, Gewicht, Wiederholungen und
+RPE gespeichert werden. Trainingshistorie, Diagramme und Planung folgen in kleinen, testbaren
+Schritten.
 
+Beim Start wendet das Backend ausstehende Datenbankmigrationen automatisch an. Manuell lässt sich
+der aktuelle Stand mit `docker compose exec backend alembic current` kontrollieren.

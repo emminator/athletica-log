@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID, uuid4
@@ -21,7 +21,7 @@ class Exercise(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     muscle_group: Mapped[str | None] = mapped_column(String(80))
-    activity_type: Mapped[ActivityType] = mapped_column(Enum(ActivityType))
+    activity_type: Mapped[ActivityType] = mapped_column(Enum(ActivityType, native_enum=False))
 
 
 class Workout(Base):
@@ -30,8 +30,12 @@ class Workout(Base):
     performed_on: Mapped[date] = mapped_column(Date, index=True)
     title: Mapped[str] = mapped_column(String(160))
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
-    sets: Mapped[list["WorkoutSet"]] = relationship(back_populates="workout", cascade="all, delete-orphan")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    sets: Mapped[list["WorkoutSet"]] = relationship(
+        back_populates="workout", cascade="all, delete-orphan", order_by="WorkoutSet.position"
+    )
 
 
 class WorkoutSet(Base):
@@ -44,4 +48,5 @@ class WorkoutSet(Base):
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(7, 2))
     effort_rpe: Mapped[Decimal | None] = mapped_column(Numeric(3, 1))
     workout: Mapped[Workout] = relationship(back_populates="sets")
+    exercise: Mapped[Exercise] = relationship()
 
