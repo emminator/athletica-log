@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,15 +11,16 @@ from app.models import Exercise, Workout, WorkoutSet
 from app.schemas import ExerciseCreate, ExerciseRead, WorkoutCreate, WorkoutRead
 
 router = APIRouter(prefix="/api/v1")
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/exercises", response_model=list[ExerciseRead])
-def list_exercises(db: Session = Depends(get_db)) -> list[Exercise]:
+def list_exercises(db: DatabaseSession) -> list[Exercise]:
     return list(db.scalars(select(Exercise).order_by(Exercise.name)))
 
 
 @router.post("/exercises", response_model=ExerciseRead, status_code=status.HTTP_201_CREATED)
-def create_exercise(payload: ExerciseCreate, db: Session = Depends(get_db)) -> Exercise:
+def create_exercise(payload: ExerciseCreate, db: DatabaseSession) -> Exercise:
     exercise = Exercise(**payload.model_dump())
     db.add(exercise)
     try:
@@ -31,7 +33,7 @@ def create_exercise(payload: ExerciseCreate, db: Session = Depends(get_db)) -> E
 
 
 @router.get("/workouts", response_model=list[WorkoutRead])
-def list_workouts(db: Session = Depends(get_db)) -> list[Workout]:
+def list_workouts(db: DatabaseSession) -> list[Workout]:
     statement = (
         select(Workout)
         .options(selectinload(Workout.sets).selectinload(WorkoutSet.exercise))
@@ -41,7 +43,7 @@ def list_workouts(db: Session = Depends(get_db)) -> list[Workout]:
 
 
 @router.post("/workouts", response_model=WorkoutRead, status_code=status.HTTP_201_CREATED)
-def create_workout(payload: WorkoutCreate, db: Session = Depends(get_db)) -> Workout:
+def create_workout(payload: WorkoutCreate, db: DatabaseSession) -> Workout:
     exercise_ids = {workout_set.exercise_id for workout_set in payload.sets}
     existing_ids = set(db.scalars(select(Exercise.id).where(Exercise.id.in_(exercise_ids))))
     missing_ids: set[UUID] = exercise_ids - existing_ids
@@ -66,4 +68,3 @@ def create_workout(payload: WorkoutCreate, db: Session = Depends(get_db)) -> Wor
         .options(selectinload(Workout.sets).selectinload(WorkoutSet.exercise))
     )
     return db.scalars(statement).one()
-

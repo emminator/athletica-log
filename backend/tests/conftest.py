@@ -20,6 +20,7 @@ def db() -> Session:
     finally:
         testing_session.close()
         Base.metadata.drop_all(engine)
+        engine.dispose()
 
 
 @pytest.fixture
@@ -31,4 +32,3 @@ def client(db: Session) -> TestClient:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-
