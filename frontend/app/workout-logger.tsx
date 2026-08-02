@@ -9,6 +9,23 @@ type Exercise = {
   activity_type: "strength" | "cardio" | "mobility" | "other";
 };
 
+type WorkoutSet = {
+  id: string;
+  exercise_id: string;
+  exercise: Exercise;
+  repetitions: number | null;
+  weight_kg: string | null;
+  effort_rpe: string | null;
+};
+
+type Workout = {
+  id: string;
+  title: string;
+  performed_on: string;
+  notes: string | null;
+  sets: WorkoutSet[];
+};
+
 type DraftSet = {
   exercise_id: string;
   repetitions: string;
@@ -21,21 +38,30 @@ const emptySet: DraftSet = { exercise_id: "", repetitions: "", weight_kg: "", ef
 
 export default function WorkoutLogger() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [exerciseName, setExerciseName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState("");
   const [workoutTitle, setWorkoutTitle] = useState("");
   const [performedOn, setPerformedOn] = useState(() => new Date().toISOString().slice(0, 10));
   const [sets, setSets] = useState<DraftSet[]>([{ ...emptySet }]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${apiUrl}/api/v1/exercises`)
-      .then((response) => {
-        if (!response.ok) throw new Error("Übungen konnten nicht geladen werden.");
-        return response.json() as Promise<Exercise[]>;
+    Promise.all([
+      fetch(`${apiUrl}/api/v1/exercises`),
+      fetch(`${apiUrl}/api/v1/workouts`),
+    ])
+      .then(async ([exerciseResponse, workoutResponse]) => {
+        if (!exerciseResponse.ok || !workoutResponse.ok) throw new Error("Daten konnten nicht geladen werden.");
+        const [exerciseData, workoutData] = await Promise.all([
+          exerciseResponse.json() as Promise<Exercise[]>,
+          workoutResponse.json() as Promise<Workout[]>,
+        ]);
+        setExercises(exerciseData);
+        setWorkouts(workoutData);
       })
-      .then(setExercises)
       .catch((error: Error) => setMessage(error.message))
       .finally(() => setLoading(false));
   }, []);
@@ -69,11 +95,32 @@ export default function WorkoutLogger() {
     setSets((current) => current.map((set, position) => (position === index ? { ...set, [field]: value } : set)));
   }
 
+  function resetForm() {
+    setEditingId(null);
+    setWorkoutTitle("");
+    setPerformedOn(new Date().toISOString().slice(0, 10));
+    setSets([{ ...emptySet }]);
+  }
+
+  function editWorkout(workout: Workout) {
+    setEditingId(workout.id);
+    setWorkoutTitle(workout.title);
+    setPerformedOn(workout.performed_on);
+    setSets(workout.sets.map((set) => ({
+      exercise_id: set.exercise_id,
+      repetitions: set.repetitions?.toString() ?? "",
+      weight_kg: set.weight_kg ?? "",
+      effort_rpe: set.effort_rpe ?? "",
+    })));
+    setMessage(`„${workout.title}“ wird bearbeitet.`);
+    document.getElementById("workout-heading")?.scrollIntoView({ behavior: "smooth" });
+  }
+
   async function saveWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    const response = await fetch(`${apiUrl}/api/v1/workouts`, {
-      method: "POST",
+    const response = await fetch(`${apiUrl}/api/v1/workouts${editingId ? `/${editingId}` : ""}`, {
+      method: editingId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: workoutTitle,
@@ -90,9 +137,28 @@ export default function WorkoutLogger() {
       setMessage("Training konnte nicht gespeichert werden. Bitte prüfe alle Felder.");
       return;
     }
-    setWorkoutTitle("");
-    setSets([{ ...emptySet }]);
-    setMessage("Training erfolgreich gespeichert.");
+    const savedWorkout = (await response.json()) as Workout;
+    setWorkouts((current) => {
+      const updated = editingId
+        ? current.map((workout) => (workout.id === savedWorkout.id ? savedWorkout : workout))
+        : [savedWorkout, ...current];
+      return updated.sort((a, b) => b.performed_on.localeCompare(a.performed_on));
+    });
+    const wasEditing = Boolean(editingId);
+    resetForm();
+    setMessage(wasEditing ? "Training erfolgreich aktualisiert." : "Training erfolgreich gespeichert.");
+  }
+
+  async function deleteWorkout(workout: Workout) {
+    if (!window.confirm(`„${workout.title}“ wirklich löschen?`)) return;
+    const response = await fetch(`${apiUrl}/api/v1/workouts/${workout.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      setMessage("Training konnte nicht gelöscht werden.");
+      return;
+    }
+    setWorkouts((current) => current.filter((item) => item.id !== workout.id));
+    if (editingId === workout.id) resetForm();
+    setMessage("Training wurde gelöscht.");
   }
 
   return (
@@ -105,12 +171,12 @@ export default function WorkoutLogger() {
           <label>Muskelgruppe<input value={muscleGroup} onChange={(event) => setMuscleGroup(event.target.value)} placeholder="z. B. Beine" /></label>
           <button type="submit">Übung speichern</button>
         </form>
-        <p className="hint">{loading ? "Übungen werden geladen …" : `${exercises.length} Übungen verfügbar`}</p>
+        <p className="hint">{loading ? "Daten werden geladen …" : `${exercises.length} Übungen verfügbar`}</p>
       </section>
 
       <section className="panel panelWide" aria-labelledby="workout-heading">
         <p className="step">02 · TRAINING</p>
-        <h2 id="workout-heading">Einheit erfassen</h2>
+        <h2 id="workout-heading">{editingId ? "Einheit bearbeiten" : "Einheit erfassen"}</h2>
         <form onSubmit={saveWorkout}>
           <div className="formRow">
             <label>Titel<input required minLength={2} value={workoutTitle} onChange={(event) => setWorkoutTitle(event.target.value)} placeholder="z. B. Unterkörper A" /></label>
@@ -127,11 +193,24 @@ export default function WorkoutLogger() {
               {sets.length > 1 && <button className="iconButton" type="button" aria-label={`Satz ${index + 1} entfernen`} onClick={() => setSets((current) => current.filter((_, position) => position !== index))}>×</button>}
             </div>
           ))}
-          <div className="actions"><button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button><button type="submit" disabled={exercises.length === 0}>Training speichern</button></div>
+          <div className="actions">
+            <button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button>
+            <div className="actionGroup">{editingId && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit" disabled={exercises.length === 0}>{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
+          </div>
         </form>
+      </section>
+
+      <section className="panel history" aria-labelledby="history-heading">
+        <p className="step">03 · VERLAUF</p>
+        <h2 id="history-heading">Trainingshistorie</h2>
+        {workouts.length === 0 && !loading ? <p className="emptyState">Noch keine Trainings gespeichert.</p> : workouts.map((workout) => (
+          <article className="historyItem" key={workout.id}>
+            <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workout.sets.length} Sätze · {workout.sets.map((set) => set.exercise.name).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</p></div>
+            <div className="historyActions"><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
+          </article>
+        ))}
       </section>
       {message && <p className="message" role="status">{message}</p>}
     </div>
   );
 }
-
