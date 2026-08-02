@@ -36,15 +36,31 @@ type DraftSet = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const emptySet: DraftSet = { exercise_id: "", repetitions: "", weight_kg: "", effort_rpe: "" };
 
+function today() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+}
+
+function draftSets(workout: Workout): DraftSet[] {
+  return workout.sets.map((set) => ({
+    exercise_id: set.exercise_id,
+    repetitions: set.repetitions?.toString() ?? "",
+    weight_kg: set.weight_kg ?? "",
+    effort_rpe: set.effort_rpe ?? "",
+  }));
+}
+
 export default function WorkoutLogger() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [exerciseName, setExerciseName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState("");
   const [workoutTitle, setWorkoutTitle] = useState("");
-  const [performedOn, setPerformedOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [performedOn, setPerformedOn] = useState(today);
   const [sets, setSets] = useState<DraftSet[]>([{ ...emptySet }]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [expandedWorkouts, setExpandedWorkouts] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -140,22 +156,29 @@ export default function WorkoutLogger() {
 
   function resetForm() {
     setEditingId(null);
+    setDuplicating(false);
     setWorkoutTitle("");
-    setPerformedOn(new Date().toISOString().slice(0, 10));
+    setPerformedOn(today());
     setSets([{ ...emptySet }]);
   }
 
   function editWorkout(workout: Workout) {
     setEditingId(workout.id);
+    setDuplicating(false);
     setWorkoutTitle(workout.title);
     setPerformedOn(workout.performed_on);
-    setSets(workout.sets.map((set) => ({
-      exercise_id: set.exercise_id,
-      repetitions: set.repetitions?.toString() ?? "",
-      weight_kg: set.weight_kg ?? "",
-      effort_rpe: set.effort_rpe ?? "",
-    })));
+    setSets(draftSets(workout));
     setMessage(`„${workout.title}“ wird bearbeitet.`);
+    document.getElementById("workout-heading")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function duplicateWorkout(workout: Workout) {
+    setEditingId(null);
+    setDuplicating(true);
+    setWorkoutTitle(workout.title);
+    setPerformedOn(today());
+    setSets(draftSets(workout));
+    setMessage(`„${workout.title}“ wurde als neue Einheit übernommen.`);
     document.getElementById("workout-heading")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -188,8 +211,13 @@ export default function WorkoutLogger() {
       return updated.sort((a, b) => b.performed_on.localeCompare(a.performed_on));
     });
     const wasEditing = Boolean(editingId);
+    const wasDuplicating = duplicating;
     resetForm();
-    setMessage(wasEditing ? "Training erfolgreich aktualisiert." : "Training erfolgreich gespeichert.");
+    setMessage(wasEditing
+      ? "Training erfolgreich aktualisiert."
+      : wasDuplicating
+        ? "Dupliziertes Training erfolgreich gespeichert."
+        : "Training erfolgreich gespeichert.");
   }
 
   async function deleteWorkout(workout: Workout) {
@@ -219,7 +247,7 @@ export default function WorkoutLogger() {
 
       <section className="panel panelWide" aria-labelledby="workout-heading">
         <p className="step">02 · TRAINING</p>
-        <h2 id="workout-heading">{editingId ? "Einheit bearbeiten" : "Einheit erfassen"}</h2>
+        <h2 id="workout-heading">{editingId ? "Einheit bearbeiten" : duplicating ? "Einheit duplizieren" : "Einheit erfassen"}</h2>
         <form onSubmit={saveWorkout}>
           <div className="formRow">
             <label>Titel<input required minLength={2} value={workoutTitle} onChange={(event) => setWorkoutTitle(event.target.value)} placeholder="z. B. Unterkörper A" /></label>
@@ -229,7 +257,7 @@ export default function WorkoutLogger() {
           {sets.map((set, index) => (
             <div className="setRow" key={index}>
               <span className="setNumber">{index + 1}</span>
-              <label>Übung<select required value={set.exercise_id} onChange={(event) => selectExercise(index, event.target.value)}><option value="">Auswählen</option>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select>{previousPerformance(set.exercise_id) && <small className="previousPerformance">Zuletzt: {previousPerformance(set.exercise_id)}</small>}</label>
+              <label>Übung<select aria-label="Übung" required value={set.exercise_id} onChange={(event) => selectExercise(index, event.target.value)}><option value="">Auswählen</option>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select>{previousPerformance(set.exercise_id) && <small className="previousPerformance">Zuletzt: {previousPerformance(set.exercise_id)}</small>}</label>
               <label>kg<input type="number" min="0" step="0.25" value={set.weight_kg} onChange={(event) => updateSet(index, "weight_kg", event.target.value)} /></label>
               <label>Wdh.<input type="number" min="1" value={set.repetitions} onChange={(event) => updateSet(index, "repetitions", event.target.value)} /></label>
               <label>RPE<input type="number" min="1" max="10" step="0.5" value={set.effort_rpe} onChange={(event) => updateSet(index, "effort_rpe", event.target.value)} /></label>
@@ -238,7 +266,7 @@ export default function WorkoutLogger() {
           ))}
           <div className="actions">
             <button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button>
-            <div className="actionGroup">{editingId && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit">{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
+            <div className="actionGroup">{(editingId || duplicating) && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit">{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
           </div>
         </form>
       </section>
@@ -250,7 +278,7 @@ export default function WorkoutLogger() {
           <article className="historyItem" key={workout.id}>
             <div className="historySummary">
               <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workout.sets.length} Sätze · {workoutVolume(workout).toLocaleString("de-DE")} kg Volumen · {workout.sets.map((set) => set.exercise.name).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</p></div>
-              <div className="historyActions"><button className="secondary" type="button" aria-expanded={expandedWorkouts.has(workout.id)} onClick={() => toggleWorkout(workout.id)}>{expandedWorkouts.has(workout.id) ? "Details schließen" : "Details anzeigen"}</button><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
+              <div className="historyActions"><button className="secondary" type="button" aria-expanded={expandedWorkouts.has(workout.id)} onClick={() => toggleWorkout(workout.id)}>{expandedWorkouts.has(workout.id) ? "Details schließen" : "Details anzeigen"}</button><button className="secondary" type="button" onClick={() => duplicateWorkout(workout)}>Duplizieren</button><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
             </div>
             {expandedWorkouts.has(workout.id) && <div className="workoutDetails"><div className="detailHeader"><span>Übung</span><span>kg</span><span>Wdh.</span><span>RPE</span></div>{workout.sets.map((set, index) => <div className="detailRow" key={set.id}><span><b>{index + 1}</b>{set.exercise.name}</span><span>{set.weight_kg ? Number(set.weight_kg).toLocaleString("de-DE") : "–"}</span><span>{set.repetitions ?? "–"}</span><span>{set.effort_rpe ? Number(set.effort_rpe).toLocaleString("de-DE") : "–"}</span></div>)}</div>}
           </article>

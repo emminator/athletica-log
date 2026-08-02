@@ -8,6 +8,7 @@ __pycache__/
 .coverage
 .venv/
 node_modules/
+.pnpm-store/
 .next/
 *.tsbuildinfo
 coverage/
