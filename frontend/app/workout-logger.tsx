@@ -45,6 +45,7 @@ export default function WorkoutLogger() {
   const [performedOn, setPerformedOn] = useState(() => new Date().toISOString().slice(0, 10));
   const [sets, setSets] = useState<DraftSet[]>([{ ...emptySet }]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedWorkouts, setExpandedWorkouts] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -70,6 +71,48 @@ export default function WorkoutLogger() {
     () => sets.reduce((sum, set) => sum + Number(set.weight_kg || 0) * Number(set.repetitions || 0), 0),
     [sets],
   );
+
+  function workoutVolume(workout: Workout) {
+    return workout.sets.reduce(
+      (sum, set) => sum + Number(set.weight_kg ?? 0) * Number(set.repetitions ?? 0),
+      0,
+    );
+  }
+
+  function previousSet(exerciseId: string) {
+    if (!exerciseId) return null;
+    return workouts
+      .flatMap((workout) => workout.sets)
+      .find((workoutSet) => workoutSet.exercise_id === exerciseId) ?? null;
+  }
+
+  function previousPerformance(exerciseId: string) {
+    const lastSet = previousSet(exerciseId);
+    if (!lastSet) return null;
+    const weight = lastSet.weight_kg ? `${Number(lastSet.weight_kg).toLocaleString("de-DE")} kg` : null;
+    const repetitions = lastSet.repetitions ? `${lastSet.repetitions} Wdh.` : null;
+    return [weight, repetitions].filter(Boolean).join(" × ");
+  }
+
+  function selectExercise(index: number, exerciseId: string) {
+    const lastSet = previousSet(exerciseId);
+    setSets((current) => current.map((set, position) => position === index ? {
+      ...set,
+      exercise_id: exerciseId,
+      repetitions: lastSet?.repetitions?.toString() ?? "",
+      weight_kg: lastSet?.weight_kg ?? "",
+      effort_rpe: lastSet?.effort_rpe ?? "",
+    } : set));
+  }
+
+  function toggleWorkout(workoutId: string) {
+    setExpandedWorkouts((current) => {
+      const updated = new Set(current);
+      if (updated.has(workoutId)) updated.delete(workoutId);
+      else updated.add(workoutId);
+      return updated;
+    });
+  }
 
   async function addExercise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -186,7 +229,7 @@ export default function WorkoutLogger() {
           {sets.map((set, index) => (
             <div className="setRow" key={index}>
               <span className="setNumber">{index + 1}</span>
-              <label>Übung<select required value={set.exercise_id} onChange={(event) => updateSet(index, "exercise_id", event.target.value)}><option value="">Auswählen</option>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select></label>
+              <label>Übung<select required value={set.exercise_id} onChange={(event) => selectExercise(index, event.target.value)}><option value="">Auswählen</option>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select>{previousPerformance(set.exercise_id) && <small className="previousPerformance">Zuletzt: {previousPerformance(set.exercise_id)}</small>}</label>
               <label>kg<input type="number" min="0" step="0.25" value={set.weight_kg} onChange={(event) => updateSet(index, "weight_kg", event.target.value)} /></label>
               <label>Wdh.<input type="number" min="1" value={set.repetitions} onChange={(event) => updateSet(index, "repetitions", event.target.value)} /></label>
               <label>RPE<input type="number" min="1" max="10" step="0.5" value={set.effort_rpe} onChange={(event) => updateSet(index, "effort_rpe", event.target.value)} /></label>
@@ -205,8 +248,11 @@ export default function WorkoutLogger() {
         <h2 id="history-heading">Trainingshistorie</h2>
         {workouts.length === 0 && !loading ? <p className="emptyState">Noch keine Trainings gespeichert.</p> : workouts.map((workout) => (
           <article className="historyItem" key={workout.id}>
-            <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workout.sets.length} Sätze · {workout.sets.map((set) => set.exercise.name).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</p></div>
-            <div className="historyActions"><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
+            <div className="historySummary">
+              <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workout.sets.length} Sätze · {workoutVolume(workout).toLocaleString("de-DE")} kg Volumen · {workout.sets.map((set) => set.exercise.name).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</p></div>
+              <div className="historyActions"><button className="secondary" type="button" aria-expanded={expandedWorkouts.has(workout.id)} onClick={() => toggleWorkout(workout.id)}>{expandedWorkouts.has(workout.id) ? "Details schließen" : "Details anzeigen"}</button><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
+            </div>
+            {expandedWorkouts.has(workout.id) && <div className="workoutDetails"><div className="detailHeader"><span>Übung</span><span>kg</span><span>Wdh.</span><span>RPE</span></div>{workout.sets.map((set, index) => <div className="detailRow" key={set.id}><span><b>{index + 1}</b>{set.exercise.name}</span><span>{set.weight_kg ? Number(set.weight_kg).toLocaleString("de-DE") : "–"}</span><span>{set.repetitions ?? "–"}</span><span>{set.effort_rpe ? Number(set.effort_rpe).toLocaleString("de-DE") : "–"}</span></div>)}</div>}
           </article>
         ))}
       </section>
