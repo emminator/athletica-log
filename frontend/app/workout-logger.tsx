@@ -195,7 +195,7 @@ export default function WorkoutLogger() {
           ))}
           <div className="actions">
             <button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button>
-            <div className="actionGroup">{editingId && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit" disabled={exercises.length === 0}>{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
+            <div className="actionGroup">{editingId && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit">{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
           </div>
         </form>
       </section>
