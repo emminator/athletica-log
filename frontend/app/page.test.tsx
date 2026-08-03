@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Home from "./page";
 
@@ -46,6 +46,37 @@ describe("Home", () => {
     expect(screen.getByRole("spinbutton", { name: "Wdh." })).toHaveValue(8);
     expect(screen.getByRole("spinbutton", { name: "RPE" })).toHaveValue(8.5);
     expect(screen.getByText("Zuletzt: 80 kg × 8 Wdh.")).toBeInTheDocument();
+  });
+
+  it("only shows a total load in history when weighted repetitions exist", async () => {
+    const tennis = { id: "exercise-1", name: "Tennis", muscle_group: null, activity_type: "other" };
+    const squat = { id: "exercise-2", name: "Kniebeuge", muscle_group: "Beine", activity_type: "strength" };
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
+      ok: true,
+      json: async () => url.endsWith("/exercises") ? [tennis, squat] : [
+        {
+          id: "workout-1",
+          title: "Tennis",
+          performed_on: "2026-08-03",
+          notes: null,
+          sets: [{ id: "set-1", exercise_id: tennis.id, exercise: tennis, repetitions: null, weight_kg: null, effort_rpe: "7" }],
+        },
+        {
+          id: "workout-2",
+          title: "Beine",
+          performed_on: "2026-08-02",
+          notes: null,
+          sets: [{ id: "set-2", exercise_id: squat.id, exercise: squat, repetitions: 8, weight_kg: "80", effort_rpe: "8" }],
+        },
+      ],
+    })));
+
+    render(<Home />);
+
+    const historyRegion = screen.getByRole("region", { name: "Trainingshistorie" });
+    expect(await within(historyRegion).findByText("1 Satz · Tennis")).toBeInTheDocument();
+    expect(within(historyRegion).queryByText("0 kg Volumen", { exact: false })).not.toBeInTheDocument();
+    expect(within(historyRegion).getByText("1 Satz · Gesamtlast: 640 kg · Kniebeuge")).toBeInTheDocument();
   });
 
   it("duplicates a past workout into an editable new workout for today", async () => {
@@ -106,4 +137,26 @@ describe("Home", () => {
       }),
     }));
   }, 15_000);
+
+  it("shows workout save errors next to the workout form", async () => {
+    const exercise = { id: "exercise-1", name: "Kniebeuge", muscle_group: "Beine", activity_type: "strength" };
+    vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => Promise.resolve({
+      ok: options?.method !== "POST",
+      status: options?.method === "POST" ? 422 : 200,
+      json: async () => url.endsWith("/exercises") ? [exercise] : [],
+    })));
+
+    render(<Home />);
+    await screen.findByRole("option", { name: "Kniebeuge" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Titel" }), { target: { value: "Beine" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Übung" }), { target: { value: exercise.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Training speichern" }));
+
+    const message = await screen.findByRole("status");
+    const workoutRegion = screen.getByRole("region", { name: "Einheit erfassen" });
+    const historyRegion = screen.getByRole("region", { name: "Trainingshistorie" });
+    expect(within(workoutRegion).getByRole("status")).toBe(message);
+    expect(within(historyRegion).queryByRole("status")).not.toBeInTheDocument();
+    expect(message).toHaveTextContent("Training konnte nicht gespeichert werden. Bitte prüfe alle Felder.");
+  });
 });

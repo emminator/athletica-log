@@ -33,6 +33,11 @@ type DraftSet = {
   effort_rpe: string;
 };
 
+type Feedback = {
+  area: "exercise" | "workout" | "history" | "global";
+  text: string;
+};
+
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const emptySet: DraftSet = { exercise_id: "", repetitions: "", weight_kg: "", effort_rpe: "" };
 
@@ -62,7 +67,7 @@ export default function WorkoutLogger() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState(false);
   const [expandedWorkouts, setExpandedWorkouts] = useState<Set<string>>(new Set());
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,7 +84,7 @@ export default function WorkoutLogger() {
         setExercises(exerciseData);
         setWorkouts(workoutData);
       })
-      .catch((error: Error) => setMessage(error.message))
+      .catch((error: Error) => setFeedback({ area: "global", text: error.message }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -93,6 +98,18 @@ export default function WorkoutLogger() {
       (sum, set) => sum + Number(set.weight_kg ?? 0) * Number(set.repetitions ?? 0),
       0,
     );
+  }
+
+  function workoutSummary(workout: Workout) {
+    const setCount = `${workout.sets.length} ${workout.sets.length === 1 ? "Satz" : "Sätze"}`;
+    const volume = workoutVolume(workout);
+    const volumeSummary = volume > 0 ? `Gesamtlast: ${volume.toLocaleString("de-DE")} kg` : null;
+    const exerciseNames = workout.sets
+      .map((set) => set.exercise.name)
+      .filter((name, index, names) => names.indexOf(name) === index)
+      .join(", ");
+
+    return [setCount, volumeSummary, exerciseNames].filter(Boolean).join(" · ");
   }
 
   function previousSet(exerciseId: string) {
@@ -132,14 +149,17 @@ export default function WorkoutLogger() {
 
   async function addExercise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setFeedback(null);
     const response = await fetch(`${apiUrl}/api/v1/exercises`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: exerciseName, muscle_group: muscleGroup || null, activity_type: "strength" }),
     });
     if (!response.ok) {
-      setMessage(response.status === 409 ? "Diese Übung existiert bereits." : "Übung konnte nicht gespeichert werden.");
+      setFeedback({
+        area: "exercise",
+        text: response.status === 409 ? "Diese Übung existiert bereits." : "Übung konnte nicht gespeichert werden.",
+      });
       return;
     }
     const exercise = (await response.json()) as Exercise;
@@ -147,7 +167,7 @@ export default function WorkoutLogger() {
     setSets((current) => current.map((set) => (set.exercise_id ? set : { ...set, exercise_id: exercise.id })));
     setExerciseName("");
     setMuscleGroup("");
-    setMessage(`„${exercise.name}“ wurde hinzugefügt.`);
+    setFeedback({ area: "exercise", text: `„${exercise.name}“ wurde hinzugefügt.` });
   }
 
   function updateSet(index: number, field: keyof DraftSet, value: string) {
@@ -157,6 +177,7 @@ export default function WorkoutLogger() {
   function resetForm() {
     setEditingId(null);
     setDuplicating(false);
+    setFeedback(null);
     setWorkoutTitle("");
     setPerformedOn(today());
     setSets([{ ...emptySet }]);
@@ -168,7 +189,7 @@ export default function WorkoutLogger() {
     setWorkoutTitle(workout.title);
     setPerformedOn(workout.performed_on);
     setSets(draftSets(workout));
-    setMessage(`„${workout.title}“ wird bearbeitet.`);
+    setFeedback({ area: "workout", text: `„${workout.title}“ wird bearbeitet.` });
     document.getElementById("workout-heading")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -178,13 +199,13 @@ export default function WorkoutLogger() {
     setWorkoutTitle(workout.title);
     setPerformedOn(today());
     setSets(draftSets(workout));
-    setMessage(`„${workout.title}“ wurde als neue Einheit übernommen.`);
+    setFeedback({ area: "workout", text: `„${workout.title}“ wurde als neue Einheit übernommen.` });
     document.getElementById("workout-heading")?.scrollIntoView({ behavior: "smooth" });
   }
 
   async function saveWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setFeedback(null);
     const response = await fetch(`${apiUrl}/api/v1/workouts${editingId ? `/${editingId}` : ""}`, {
       method: editingId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -200,7 +221,7 @@ export default function WorkoutLogger() {
       }),
     });
     if (!response.ok) {
-      setMessage("Training konnte nicht gespeichert werden. Bitte prüfe alle Felder.");
+      setFeedback({ area: "workout", text: "Training konnte nicht gespeichert werden. Bitte prüfe alle Felder." });
       return;
     }
     const savedWorkout = (await response.json()) as Workout;
@@ -213,27 +234,31 @@ export default function WorkoutLogger() {
     const wasEditing = Boolean(editingId);
     const wasDuplicating = duplicating;
     resetForm();
-    setMessage(wasEditing
-      ? "Training erfolgreich aktualisiert."
-      : wasDuplicating
-        ? "Dupliziertes Training erfolgreich gespeichert."
-        : "Training erfolgreich gespeichert.");
+    setFeedback({
+      area: "workout",
+      text: wasEditing
+        ? "Training erfolgreich aktualisiert."
+        : wasDuplicating
+          ? "Dupliziertes Training erfolgreich gespeichert."
+          : "Training erfolgreich gespeichert.",
+    });
   }
 
   async function deleteWorkout(workout: Workout) {
     if (!window.confirm(`„${workout.title}“ wirklich löschen?`)) return;
     const response = await fetch(`${apiUrl}/api/v1/workouts/${workout.id}`, { method: "DELETE" });
     if (!response.ok) {
-      setMessage("Training konnte nicht gelöscht werden.");
+      setFeedback({ area: "history", text: "Training konnte nicht gelöscht werden." });
       return;
     }
     setWorkouts((current) => current.filter((item) => item.id !== workout.id));
     if (editingId === workout.id) resetForm();
-    setMessage("Training wurde gelöscht.");
+    setFeedback({ area: "history", text: "Training wurde gelöscht." });
   }
 
   return (
     <div className="workspace">
+      {feedback?.area === "global" && <p className="message messageGlobal" role="status">{feedback.text}</p>}
       <section className="panel" aria-labelledby="exercise-heading">
         <p className="step">01 · ÜBUNGSKATALOG</p>
         <h2 id="exercise-heading">Übung hinzufügen</h2>
@@ -242,6 +267,7 @@ export default function WorkoutLogger() {
           <label>Muskelgruppe<input value={muscleGroup} onChange={(event) => setMuscleGroup(event.target.value)} placeholder="z. B. Beine" /></label>
           <button type="submit">Übung speichern</button>
         </form>
+        {feedback?.area === "exercise" && <p className="message" role="status">{feedback.text}</p>}
         <p className="hint">{loading ? "Daten werden geladen …" : `${exercises.length} Übungen verfügbar`}</p>
       </section>
 
@@ -253,7 +279,7 @@ export default function WorkoutLogger() {
             <label>Titel<input required minLength={2} value={workoutTitle} onChange={(event) => setWorkoutTitle(event.target.value)} placeholder="z. B. Unterkörper A" /></label>
             <label>Datum<input required type="date" value={performedOn} onChange={(event) => setPerformedOn(event.target.value)} /></label>
           </div>
-          <div className="setHeader"><span>Sätze</span><b>{totalVolume.toLocaleString("de-DE")} kg Volumen</b></div>
+          <div className="setHeader"><span>Sätze</span><b>Gesamtlast: {totalVolume.toLocaleString("de-DE")} kg</b></div>
           {sets.map((set, index) => (
             <div className="setRow" key={index}>
               <span className="setNumber">{index + 1}</span>
@@ -264,6 +290,7 @@ export default function WorkoutLogger() {
               {sets.length > 1 && <button className="iconButton" type="button" aria-label={`Satz ${index + 1} entfernen`} onClick={() => setSets((current) => current.filter((_, position) => position !== index))}>×</button>}
             </div>
           ))}
+          {feedback?.area === "workout" && <p className="message" role="status">{feedback.text}</p>}
           <div className="actions">
             <button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button>
             <div className="actionGroup">{(editingId || duplicating) && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit">{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
@@ -274,17 +301,17 @@ export default function WorkoutLogger() {
       <section className="panel history" aria-labelledby="history-heading">
         <p className="step">03 · VERLAUF</p>
         <h2 id="history-heading">Trainingshistorie</h2>
+        {feedback?.area === "history" && <p className="message" role="status">{feedback.text}</p>}
         {workouts.length === 0 && !loading ? <p className="emptyState">Noch keine Trainings gespeichert.</p> : workouts.map((workout) => (
           <article className="historyItem" key={workout.id}>
             <div className="historySummary">
-              <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workout.sets.length} Sätze · {workoutVolume(workout).toLocaleString("de-DE")} kg Volumen · {workout.sets.map((set) => set.exercise.name).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</p></div>
+              <div><time dateTime={workout.performed_on}>{new Intl.DateTimeFormat("de-DE").format(new Date(`${workout.performed_on}T00:00:00`))}</time><h3>{workout.title}</h3><p>{workoutSummary(workout)}</p></div>
               <div className="historyActions"><button className="secondary" type="button" aria-expanded={expandedWorkouts.has(workout.id)} onClick={() => toggleWorkout(workout.id)}>{expandedWorkouts.has(workout.id) ? "Details schließen" : "Details anzeigen"}</button><button className="secondary" type="button" onClick={() => duplicateWorkout(workout)}>Duplizieren</button><button className="secondary" type="button" onClick={() => editWorkout(workout)}>Bearbeiten</button><button className="danger" type="button" onClick={() => deleteWorkout(workout)}>Löschen</button></div>
             </div>
             {expandedWorkouts.has(workout.id) && <div className="workoutDetails"><div className="detailHeader"><span>Übung</span><span>kg</span><span>Wdh.</span><span>RPE</span></div>{workout.sets.map((set, index) => <div className="detailRow" key={set.id}><span><b>{index + 1}</b>{set.exercise.name}</span><span>{set.weight_kg ? Number(set.weight_kg).toLocaleString("de-DE") : "–"}</span><span>{set.repetitions ?? "–"}</span><span>{set.effort_rpe ? Number(set.effort_rpe).toLocaleString("de-DE") : "–"}</span></div>)}</div>}
           </article>
         ))}
       </section>
-      {message && <p className="message" role="status">{message}</p>}
     </div>
   );
 }

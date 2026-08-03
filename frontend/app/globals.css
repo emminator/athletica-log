@@ -27,7 +27,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .previousPerformance { color: #b8ff55; font-size: .7rem; font-weight: 600; }
 .iconButton { margin-top: 26px; padding: 11px 0; width: 30px; background: transparent; color: #9ca29d; font-size: 1.25rem; }
 .secondary { background: #242a25; color: #dce1dc; }
-.message { grid-column: 1 / -1; margin: 0; padding: 14px 18px; border-left: 3px solid #b8ff55; background: #171c18; color: #dce1dc; }
+.message { margin: 0; padding: 14px 18px; border-left: 3px solid #b8ff55; background: #171c18; color: #dce1dc; }
+.panel > .message { margin-top: 18px; }
+.messageGlobal { grid-column: 1 / -1; }
 .actionGroup, .historyActions { display: flex; gap: 8px; }
 .history { grid-column: 1 / -1; }
 .historyItem { padding: 18px 0; border-top: 1px solid #2c332e; }
