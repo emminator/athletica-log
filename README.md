@@ -45,3 +45,10 @@ Schritten.
 
 Beim Start wendet das Backend ausstehende Datenbankmigrationen automatisch an. Manuell lässt sich
 der aktuelle Stand mit `docker compose exec backend alembic current` kontrollieren.
+
+## Produktivbetrieb
+
+Die vorgesehene Render-Konfiguration liegt in `render.yaml`. Sie erstellt einen Docker-Webdienst
+und eine private PostgreSQL-Datenbank in Frankfurt und veröffentlicht die Anwendung unter
+`athletica.emminger-net.de`. Einrichtung, Login-Sicherheit und CI/CD-Ablauf sind in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) beschrieben.

@@ -8,12 +8,17 @@ describe("Home", () => {
     vi.useRealTimers();
   });
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
+      ok: true,
+      json: async () => url.endsWith("/auth/session")
+        ? { authenticated: true, username: "athletica" }
+        : [],
+    })));
   });
 
-  it("presents the workout logger", () => {
+  it("presents the workout logger", async () => {
     render(<Home />);
-    expect(screen.getByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Training speichern" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trainingshistorie" })).toBeInTheDocument();
   });
@@ -22,7 +27,9 @@ describe("Home", () => {
     const exercise = { id: "exercise-1", name: "Kniebeuge", muscle_group: "Beine", activity_type: "strength" };
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
-      json: async () => url.endsWith("/exercises") ? [exercise] : [{
+      json: async () => url.endsWith("/auth/session")
+        ? { authenticated: true, username: "athletica" }
+        : url.endsWith("/exercises") ? [exercise] : [{
         id: "workout-1",
         title: "Beine",
         performed_on: "2026-08-01",
@@ -53,7 +60,9 @@ describe("Home", () => {
     const squat = { id: "exercise-2", name: "Kniebeuge", muscle_group: "Beine", activity_type: "strength" };
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
-      json: async () => url.endsWith("/exercises") ? [tennis, squat] : [
+      json: async () => url.endsWith("/auth/session")
+        ? { authenticated: true, username: "athletica" }
+        : url.endsWith("/exercises") ? [tennis, squat] : [
         {
           id: "workout-1",
           title: "Tennis",
@@ -73,7 +82,7 @@ describe("Home", () => {
 
     render(<Home />);
 
-    const historyRegion = screen.getByRole("region", { name: "Trainingshistorie" });
+    const historyRegion = await screen.findByRole("region", { name: "Trainingshistorie" });
     expect(await within(historyRegion).findByText("1 Satz · Tennis")).toBeInTheDocument();
     expect(within(historyRegion).queryByText("0 kg Volumen", { exact: false })).not.toBeInTheDocument();
     expect(within(historyRegion).getByText("1 Satz · Gesamtlast: 640 kg · Kniebeuge")).toBeInTheDocument();
@@ -97,6 +106,9 @@ describe("Home", () => {
       ],
     };
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica" }) });
+      }
       if (options?.method === "POST") {
         return Promise.resolve({ ok: true, json: async () => ({ ...workout, id: "workout-2", performed_on: "2026-08-02" }) });
       }
@@ -141,9 +153,11 @@ describe("Home", () => {
   it("shows workout save errors next to the workout form", async () => {
     const exercise = { id: "exercise-1", name: "Kniebeuge", muscle_group: "Beine", activity_type: "strength" };
     vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => Promise.resolve({
-      ok: options?.method !== "POST",
+      ok: url.endsWith("/auth/session") || options?.method !== "POST",
       status: options?.method === "POST" ? 422 : 200,
-      json: async () => url.endsWith("/exercises") ? [exercise] : [],
+      json: async () => url.endsWith("/auth/session")
+        ? { authenticated: true, username: "athletica" }
+        : url.endsWith("/exercises") ? [exercise] : [],
     })));
 
     render(<Home />);
@@ -158,5 +172,28 @@ describe("Home", () => {
     expect(within(workoutRegion).getByRole("status")).toBe(message);
     expect(within(historyRegion).queryByRole("status")).not.toBeInTheDocument();
     expect(message).toHaveTextContent("Training konnte nicht gespeichert werden. Bitte prüfe alle Felder.");
+  });
+
+  it("requires a successful login before showing training data", async () => {
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) return Promise.resolve({ ok: false, status: 401 });
+      if (url.endsWith("/auth/login") && options?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica" }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "athletica" } });
+    fireEvent.change(screen.getByLabelText("Passwort"), { target: { value: "a-strong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anmelden" }));
+
+    expect(await screen.findByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/auth/login", expect.objectContaining({
+      method: "POST",
+      credentials: "include",
+    }));
   });
 });

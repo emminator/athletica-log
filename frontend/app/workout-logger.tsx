@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "./api";
 
 type Exercise = {
   id: string;
@@ -38,7 +39,6 @@ type Feedback = {
   text: string;
 };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const emptySet: DraftSet = { exercise_id: "", repetitions: "", weight_kg: "", effort_rpe: "" };
 
 function today() {
@@ -72,8 +72,8 @@ export default function WorkoutLogger() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${apiUrl}/api/v1/exercises`),
-      fetch(`${apiUrl}/api/v1/workouts`),
+      apiFetch("/api/v1/exercises"),
+      apiFetch("/api/v1/workouts"),
     ])
       .then(async ([exerciseResponse, workoutResponse]) => {
         if (!exerciseResponse.ok || !workoutResponse.ok) throw new Error("Daten konnten nicht geladen werden.");
@@ -150,7 +150,7 @@ export default function WorkoutLogger() {
   async function addExercise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
-    const response = await fetch(`${apiUrl}/api/v1/exercises`, {
+    const response = await apiFetch("/api/v1/exercises", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: exerciseName, muscle_group: muscleGroup || null, activity_type: "strength" }),
@@ -206,7 +206,7 @@ export default function WorkoutLogger() {
   async function saveWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
-    const response = await fetch(`${apiUrl}/api/v1/workouts${editingId ? `/${editingId}` : ""}`, {
+    const response = await apiFetch(`/api/v1/workouts${editingId ? `/${editingId}` : ""}`, {
       method: editingId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -246,7 +246,7 @@ export default function WorkoutLogger() {
 
   async function deleteWorkout(workout: Workout) {
     if (!window.confirm(`„${workout.title}“ wirklich löschen?`)) return;
-    const response = await fetch(`${apiUrl}/api/v1/workouts/${workout.id}`, { method: "DELETE" });
+    const response = await apiFetch(`/api/v1/workouts/${workout.id}`, { method: "DELETE" });
     if (!response.ok) {
       setFeedback({ area: "history", text: "Training konnte nicht gelöscht werden." });
       return;

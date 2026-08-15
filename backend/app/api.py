@@ -6,11 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth import require_authenticated
 from app.db import get_db
 from app.models import Exercise, Workout, WorkoutSet
 from app.schemas import ExerciseCreate, ExerciseRead, WorkoutCreate, WorkoutRead
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_authenticated)])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
