@@ -23,9 +23,9 @@ jobs:
       - name: Start development stack
         run: docker compose up --build --detach
       - name: Ruff
-        run: docker compose exec -T backend ruff check .
+        run: docker compose exec -T backend ruff check --no-cache .
       - name: Pytest
-        run: docker compose exec -T backend python -m pytest -q
+        run: docker compose exec -T -e COVERAGE_FILE=/tmp/.coverage backend python -m pytest -q -p no:cacheprovider
       - name: ESLint
         run: docker compose exec -T frontend pnpm lint
       - name: TypeScript
