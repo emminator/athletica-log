@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Start development stack
         run: docker compose up --build --detach
       - name: Ruff
@@ -42,6 +42,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Build production image
         run: docker build --tag athletica-log:${{ github.sha }} .
