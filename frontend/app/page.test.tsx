@@ -20,6 +20,7 @@ describe("Home", () => {
   it("presents the workout logger", async () => {
     render(<Home />);
     expect(await screen.findByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
+    expect(screen.getByText("Satz 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Training speichern" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trainingshistorie" })).toBeInTheDocument();
   });

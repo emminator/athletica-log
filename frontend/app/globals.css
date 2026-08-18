@@ -16,17 +16,19 @@ h1 { margin: 18px 0 24px; font-size: clamp(3.2rem, 7vw, 6.5rem); line-height: .9
 .panel h2 { margin: 8px 0 24px; font-size: 1.6rem; letter-spacing: -.03em; }
 form, label { display: flex; flex-direction: column; gap: 8px; }
 form { gap: 18px; } label { color: #959c97; font-size: .75rem; font-weight: 700; }
-input, select { width: 100%; border: 1px solid #384039; border-radius: 3px; background: #0e110f; color: #f5f7f4; padding: 12px; outline: none; }
+input, select { width: 100%; height: 44px; min-width: 0; border: 1px solid #384039; border-radius: 3px; background: #0e110f; color: #f5f7f4; padding: 12px; outline: none; }
 input:focus, select:focus { border-color: #b8ff55; box-shadow: 0 0 0 2px rgba(184, 255, 85, .12); }
 button { align-self: flex-start; padding: 13px 18px; border: 0; border-radius: 3px; background: #b8ff55; color: #11150f; font-weight: 800; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .4; }
 .hint { color: #747b75; font-size: .8rem; }
 .formRow { display: grid; grid-template-columns: 1fr 180px; gap: 12px; }
+.formRow label { min-width: 0; }
+input[type="date"] { max-width: 100%; }
 .setHeader, .actions { display: flex; align-items: center; justify-content: space-between; }
 .setHeader { padding-top: 8px; color: #959c97; font-size: .82rem; }.setHeader b { color: #b8ff55; }
-.setRow { display: grid; grid-template-columns: 28px minmax(150px, 1fr) 80px 70px 70px 30px; gap: 8px; align-items: start; }
+.setRow { display: grid; grid-template-columns: 64px minmax(150px, 1fr) 80px 70px 70px 30px; gap: 10px; align-items: start; padding: 14px; border: 1px solid #303731; border-radius: 6px; background: #151916; }
 .setRow label { min-width: 0; }
-.setNumber { margin-top: 43px; color: #727873; font-weight: 800; }
+.setNumber { justify-self: start; margin-top: 32px; color: #8e968f; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .previousPerformance { color: #b8ff55; font-size: .7rem; font-weight: 600; }
 .iconButton { margin-top: 26px; padding: 11px 0; width: 30px; background: transparent; color: #9ca29d; font-size: 1.25rem; }
 .secondary { background: #242a25; color: #dce1dc; }
@@ -53,17 +55,17 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .loginPanel .intro { margin-bottom: 28px; font-size: 1rem; }
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
-  .setRow { grid-template-columns: 28px minmax(0, 1fr); }
-  .setRow label { grid-column: 2; }
-  .setNumber { grid-column: 1; grid-row: 1; }
-  .setRow .iconButton { grid-column: 2; justify-self: end; margin-top: 0; }
+  .setRow { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
+  .setRow + .setRow { margin-top: 10px; }
+  .setRow label { grid-column: 1; }
+  .setNumber { grid-column: 1; margin: 0 0 -2px; }
+  .setRow .iconButton { grid-column: 1; justify-self: end; margin-top: 0; }
   input, select { font-size: 16px; }
 }
 @media (max-width: 600px) {
   nav span { display: none; }
   header { padding-top: 8vh; }
   .formRow { grid-template-columns: 1fr; }
-  .setRow { grid-template-columns: 24px minmax(0, 1fr); }
   .actions { gap: 12px; }
   .historySummary { flex-direction: column; }
   .historyActions { align-self: flex-start; flex-wrap: wrap; }

@@ -282,7 +282,7 @@ export default function WorkoutLogger() {
           <div className="setHeader"><span>Sätze</span><b>Gesamtlast: {totalVolume.toLocaleString("de-DE")} kg</b></div>
           {sets.map((set, index) => (
             <div className="setRow" key={index}>
-              <span className="setNumber">{index + 1}</span>
+              <span className="setNumber">Satz {index + 1}</span>
               <label>Übung<select aria-label="Übung" required value={set.exercise_id} onChange={(event) => selectExercise(index, event.target.value)}><option value="">Auswählen</option>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select>{previousPerformance(set.exercise_id) && <small className="previousPerformance">Zuletzt: {previousPerformance(set.exercise_id)}</small>}</label>
               <label>kg<input type="number" min="0" step="0.25" value={set.weight_kg} onChange={(event) => updateSet(index, "weight_kg", event.target.value)} /></label>
               <label>Wdh.<input type="number" min="1" value={set.repetitions} onChange={(event) => updateSet(index, "repetitions", event.target.value)} /></label>
