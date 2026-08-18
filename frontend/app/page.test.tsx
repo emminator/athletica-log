@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { viewport } from "./layout";
 import Home from "./page";
 
 describe("Home", () => {
@@ -21,6 +22,10 @@ describe("Home", () => {
     expect(await screen.findByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Training speichern" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trainingshistorie" })).toBeInTheDocument();
+  });
+
+  it("starts mobile pages at the device width without zoom", () => {
+    expect(viewport).toEqual({ width: "device-width", initialScale: 1 });
   });
 
   it("prefills the last performance when an exercise is selected", async () => {
