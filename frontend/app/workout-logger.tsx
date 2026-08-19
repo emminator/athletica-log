@@ -291,7 +291,7 @@ export default function WorkoutLogger() {
             </div>
           ))}
           {feedback?.area === "workout" && <p className="message" role="status">{feedback.text}</p>}
-          <div className="actions">
+          <div className={`actions${editingId || duplicating ? " actionsExpanded" : ""}`}>
             <button className="secondary" type="button" onClick={() => setSets((current) => [...current, { ...emptySet }])}>+ Satz</button>
             <div className="actionGroup">{(editingId || duplicating) && <button className="secondary" type="button" onClick={resetForm}>Abbrechen</button>}<button type="submit">{editingId ? "Änderungen speichern" : "Training speichern"}</button></div>
           </div>

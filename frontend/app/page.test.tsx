@@ -132,6 +132,8 @@ describe("Home", () => {
     expect(screen.getByRole("heading", { name: "Einheit duplizieren" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Titel" })).toHaveValue("Ganzkörper A");
     expect(screen.getByLabelText("Datum")).toHaveValue("2026-08-02");
+    expect(screen.getByRole("button", { name: "Training speichern" }).closest(".actions"))
+      .toHaveClass("actionsExpanded");
     expect(screen.getAllByRole("combobox", { name: "Übung" }).map((field) => (field as HTMLSelectElement).value)).toEqual([squat.id, row.id]);
     expect(screen.getAllByRole("spinbutton", { name: "kg" }).map((field) => (field as HTMLInputElement).value)).toEqual(["80", "60"]);
     expect(screen.getAllByRole("spinbutton", { name: "Wdh." }).map((field) => (field as HTMLInputElement).value)).toEqual(["8", "10"]);
