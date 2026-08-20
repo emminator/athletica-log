@@ -6,6 +6,7 @@ main { max-width: 1180px; min-height: 100vh; margin: auto; padding: 0 28px 80px;
 nav { height: 82px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2c332e; }
 nav strong { font-size: 1.2rem; letter-spacing: -.03em; } nav span { color: #aab0ab; font-size: .9rem; }
 .navActions { display: flex; align-items: center; gap: 18px; }
+.currentUser { color: #b8ff55; font-weight: 700; }
 .navButton { padding: 8px 11px; background: transparent; border: 1px solid #384039; color: #dce1dc; font-size: .78rem; }
 header { max-width: 860px; padding: 10vh 0 7vh; }
 .eyebrow, .step { color: #b8ff55; font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
@@ -54,8 +55,15 @@ input[type="date"] { display: block; width: 100%; max-width: 100%; }
 .loginPanel { width: min(100%, 430px); border: 1px solid #2c332e; background: rgba(17, 20, 18, .94); padding: clamp(28px, 6vw, 48px); }
 .loginPanel h1 { margin: 12px 0 18px; font-size: clamp(2.5rem, 8vw, 4rem); }
 .loginPanel .intro { margin-bottom: 28px; font-size: 1rem; }
+.authAlternative { margin-top: 18px; padding: 0; background: transparent; color: #959c97; font-size: .8rem; }
+.inviteBanner { display: grid; grid-template-columns: auto minmax(240px, 1fr) auto; gap: 18px; align-items: end; margin-top: 24px; padding: 20px; border: 1px solid #41543f; background: #151c16; }
+.inviteBanner h2 { margin: 6px 0 0; font-size: 1.05rem; }
+.inviteBanner .actionGroup { align-items: stretch; }
+.inviteBanner button { align-self: stretch; white-space: nowrap; }
+.navMessage { margin-top: 18px; }
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
+  .inviteBanner { grid-template-columns: 1fr; align-items: stretch; }
   .setRow { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
   .setRow + .setRow { margin-top: 10px; }
   .setRow label { grid-column: 1; }

@@ -15,6 +15,5 @@
 - **Analyse:** Volumen, geschätztes 1RM, Bestleistungen, Muskelgruppen und Trends
 - **Breiter Sport:** Cardio, Mobilität und frei definierbare Aktivitäten
 
-Entscheidungen zu Anmeldung, Geräte-Synchronisation, Offline-Modus und Hosting werden erst nach
-dem lokalen MVP getroffen.
-
+Der produktive MVP verwendet einladungsbasierte Benutzerkonten und strikt getrennte Trainingsdaten.
+Offene Registrierung, Geräte-Synchronisation und Offline-Modus bleiben spätere Ausbaustufen.

@@ -3,33 +3,65 @@ import base64
 import getpass
 import hashlib
 import hmac
-import json
 import secrets
-import time
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.db import get_db
+from app.models import Invitation, User, UserSession
 
 SESSION_COOKIE = "athletica_session"
 SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
+USERNAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{2,31}$"
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1, max_length=120)
+    username: str = Field(min_length=3, max_length=32)
     password: str = Field(min_length=1, max_length=256)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class RegistrationRequest(BaseModel):
+    invitation_token: str = Field(min_length=32, max_length=256)
+    username: str = Field(min_length=3, max_length=32, pattern=USERNAME_PATTERN)
+    password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class InvitationCreate(BaseModel):
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class InvitationRead(BaseModel):
+    token: str
+    expires_at: datetime
 
 
 class SessionRead(BaseModel):
     authenticated: bool
     username: str
+    is_admin: bool
 
 
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
+DatabaseSession = Annotated[Session, Depends(get_db)]
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
@@ -66,104 +98,204 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_session_token(username: str, settings: Settings, now: int | None = None) -> str:
-    issued_at = now if now is not None else int(time.time())
-    payload = json.dumps(
-        {
-            "username": username,
-            "expires_at": issued_at + settings.session_max_age_seconds,
-        },
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    encoded_payload = _encode(payload)
-    signature = hmac.new(
-        settings.session_secret.encode("utf-8"), encoded_payload.encode("ascii"), hashlib.sha256
-    ).digest()
-    return f"{encoded_payload}.{_encode(signature)}"
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def session_username(token: str, settings: Settings, now: int | None = None) -> str | None:
+def get_or_create_bootstrap_user(db: Session, settings: Settings) -> User:
+    username = settings.auth_username.strip().lower()
+    user = db.scalar(select(User).where(User.username == username))
+    if user is not None:
+        return user
+    user = User(
+        username=username,
+        password_hash=settings.auth_password_hash,
+        is_admin=True,
+        is_active=True,
+    )
+    db.add(user)
     try:
-        encoded_payload, encoded_signature = token.split(".", 1)
-        expected_signature = hmac.new(
-            settings.session_secret.encode("utf-8"),
-            encoded_payload.encode("ascii"),
-            hashlib.sha256,
-        ).digest()
-        if not hmac.compare_digest(expected_signature, _decode(encoded_signature)):
-            return None
-        payload = json.loads(_decode(encoded_payload))
-        current_time = now if now is not None else int(time.time())
-        if payload["expires_at"] < current_time or payload["username"] != settings.auth_username:
-            return None
-        return str(payload["username"])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        return None
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        user = db.scalar(select(User).where(User.username == username))
+        if user is None:
+            raise
+    return user
 
 
-def current_username(request: Request, settings: Settings) -> str | None:
-    if not settings.auth_enabled:
-        return settings.auth_username
-    token = request.cookies.get(SESSION_COOKIE)
-    return session_username(token, settings) if token else None
-
-
-def require_authenticated(request: Request, settings: SettingsDependency) -> str:
-    username = current_username(request, settings)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+def set_session_cookie(response: Response, user: User, db: Session, settings: Settings) -> None:
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.now(UTC)
+    db.add(
+        UserSession(
+            token_hash=token_hash(raw_token),
+            user_id=user.id,
+            created_at=now,
+            expires_at=now + timedelta(seconds=settings.session_max_age_seconds),
         )
-    return username
-
-
-@router.get("/session", response_model=SessionRead)
-def read_session(request: Request, settings: SettingsDependency) -> SessionRead:
-    username = current_username(request, settings)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
-        )
-    return SessionRead(authenticated=True, username=username)
-
-
-@router.post("/login", response_model=SessionRead)
-def login(payload: LoginRequest, response: Response, settings: SettingsDependency) -> SessionRead:
-    valid_username = hmac.compare_digest(payload.username, settings.auth_username)
-    valid_password = verify_password(payload.password, settings.auth_password_hash)
-    if settings.auth_enabled and not (valid_username and valid_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
+    )
+    db.commit()
     response.set_cookie(
         SESSION_COOKIE,
-        create_session_token(settings.auth_username, settings),
+        raw_token,
         max_age=settings.session_max_age_seconds,
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite="strict",
         path="/",
     )
-    return SessionRead(authenticated=True, username=settings.auth_username)
+
+
+def current_user(request: Request, db: Session, settings: Settings) -> User | None:
+    if not settings.auth_enabled:
+        return get_or_create_bootstrap_user(db, settings)
+    raw_token = request.cookies.get(SESSION_COOKIE)
+    if not raw_token:
+        return None
+    now = datetime.now(UTC)
+    statement = (
+        select(User)
+        .join(UserSession, UserSession.user_id == User.id)
+        .where(
+            UserSession.token_hash == token_hash(raw_token),
+            UserSession.expires_at > now,
+            User.is_active.is_(True),
+        )
+    )
+    return db.scalar(statement)
+
+
+def require_authenticated(
+    request: Request, db: DatabaseSession, settings: SettingsDependency
+) -> User:
+    user = current_user(request, db, settings)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+        )
+    return user
+
+
+AuthenticatedUser = Annotated[User, Depends(require_authenticated)]
+
+
+def session_read(user: User) -> SessionRead:
+    return SessionRead(authenticated=True, username=user.username, is_admin=user.is_admin)
+
+
+@router.get("/session", response_model=SessionRead)
+def read_session(user: AuthenticatedUser) -> SessionRead:
+    return session_read(user)
+
+
+@router.post("/login", response_model=SessionRead)
+def login(
+    payload: LoginRequest,
+    response: Response,
+    db: DatabaseSession,
+    settings: SettingsDependency,
+) -> SessionRead:
+    user = db.scalar(select(User).where(User.username == payload.username))
+    if (
+        user is None
+        or not user.is_active
+        or not verify_password(payload.password, user.password_hash)
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    set_session_cookie(response, user, db, settings)
+    return session_read(user)
+
+
+@router.post("/register", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegistrationRequest,
+    response: Response,
+    db: DatabaseSession,
+    settings: SettingsDependency,
+) -> SessionRead:
+    now = datetime.now(UTC)
+    invitation = db.scalar(
+        select(Invitation).where(
+            Invitation.token_hash == token_hash(payload.invitation_token),
+            Invitation.used_at.is_(None),
+            Invitation.expires_at > now,
+        ).with_for_update()
+    )
+    if invitation is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid invitation")
+    user = User(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        is_admin=False,
+        is_active=True,
+    )
+    db.add(user)
+    invitation.used_at = now
+    try:
+        db.flush()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username unavailable"
+        ) from error
+    set_session_cookie(response, user, db, settings)
+    return session_read(user)
+
+
+@router.post("/invitations", response_model=InvitationRead, status_code=status.HTTP_201_CREATED)
+def create_invitation(
+    payload: InvitationCreate, user: AuthenticatedUser, db: DatabaseSession
+) -> InvitationRead:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.now(UTC)
+    invitation = Invitation(
+        token_hash=token_hash(raw_token),
+        invited_by_id=user.id,
+        created_at=now,
+        expires_at=now + timedelta(days=payload.expires_in_days),
+    )
+    db.add(invitation)
+    db.commit()
+    return InvitationRead(token=raw_token, expires_at=invitation.expires_at)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> None:
+def logout(request: Request, response: Response, db: DatabaseSession) -> None:
+    raw_token = request.cookies.get(SESSION_COOKIE)
+    if raw_token:
+        db.execute(delete(UserSession).where(UserSession.token_hash == token_hash(raw_token)))
+        db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Athletica Log authentication utilities")
-    parser.add_argument("command", choices=["hash-password"])
+    parser.add_argument("command", choices=["hash-password", "set-password"])
+    parser.add_argument("--username")
     args = parser.parse_args()
+    password = getpass.getpass("Password: ")
+    confirmation = getpass.getpass("Confirm password: ")
+    if password != confirmation:
+        raise SystemExit("Passwords do not match")
+    if len(password) < 12:
+        raise SystemExit("Use at least 12 characters")
     if args.command == "hash-password":
-        password = getpass.getpass("Password: ")
-        confirmation = getpass.getpass("Confirm password: ")
-        if password != confirmation:
-            raise SystemExit("Passwords do not match")
-        if len(password) < 12:
-            raise SystemExit("Use at least 12 characters")
         print(hash_password(password))
+        return
+    if not args.username:
+        raise SystemExit("--username is required for set-password")
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.username.strip().lower()))
+        if user is None:
+            raise SystemExit("User not found")
+        user.password_hash = hash_password(password)
+        db.commit()
+    print("Password updated")
 
 
 if __name__ == "__main__":

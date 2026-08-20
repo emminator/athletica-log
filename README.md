@@ -40,7 +40,8 @@ Anschließend:
 
 Das Projekt enthält ein professionelles Grundgerüst und den ersten durchgängigen MVP-Schnitt:
 Übungen können angelegt und Trainingseinheiten mit mehreren Sätzen, Gewicht, Wiederholungen und
-RPE gespeichert werden. Trainingshistorie, Diagramme und Planung folgen in kleinen, testbaren
+RPE gespeichert werden. Einladungsbasierte Benutzerkonten trennen Übungen und Trainingsdaten
+konsequent pro Person. Trainingshistorie, Diagramme und Planung folgen in kleinen, testbaren
 Schritten.
 
 Beim Start wendet das Backend ausstehende Datenbankmigrationen automatisch an. Manuell lässt sich

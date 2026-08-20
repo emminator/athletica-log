@@ -7,12 +7,13 @@ describe("Home", () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    window.history.replaceState({}, "", "/");
   });
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
       json: async () => url.endsWith("/auth/session")
-        ? { authenticated: true, username: "athletica" }
+        ? { authenticated: true, username: "athletica", is_admin: false }
         : [],
     })));
   });
@@ -34,7 +35,7 @@ describe("Home", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
       json: async () => url.endsWith("/auth/session")
-        ? { authenticated: true, username: "athletica" }
+        ? { authenticated: true, username: "athletica", is_admin: false }
         : url.endsWith("/exercises") ? [exercise] : [{
         id: "workout-1",
         title: "Beine",
@@ -67,7 +68,7 @@ describe("Home", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
       json: async () => url.endsWith("/auth/session")
-        ? { authenticated: true, username: "athletica" }
+        ? { authenticated: true, username: "athletica", is_admin: false }
         : url.endsWith("/exercises") ? [tennis, squat] : [
         {
           id: "workout-1",
@@ -113,7 +114,7 @@ describe("Home", () => {
     };
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {
       if (url.endsWith("/auth/session")) {
-        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica" }) });
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica", is_admin: false }) });
       }
       if (options?.method === "POST") {
         return Promise.resolve({ ok: true, json: async () => ({ ...workout, id: "workout-2", performed_on: "2026-08-02" }) });
@@ -164,7 +165,7 @@ describe("Home", () => {
       ok: url.endsWith("/auth/session") || options?.method !== "POST",
       status: options?.method === "POST" ? 422 : 200,
       json: async () => url.endsWith("/auth/session")
-        ? { authenticated: true, username: "athletica" }
+        ? { authenticated: true, username: "athletica", is_admin: false }
         : url.endsWith("/exercises") ? [exercise] : [],
     })));
 
@@ -186,7 +187,7 @@ describe("Home", () => {
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {
       if (url.endsWith("/auth/session")) return Promise.resolve({ ok: false, status: 401 });
       if (url.endsWith("/auth/login") && options?.method === "POST") {
-        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica" }) });
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "athletica", is_admin: false }) });
       }
       return Promise.resolve({ ok: true, json: async () => [] });
     });
@@ -203,5 +204,71 @@ describe("Home", () => {
       method: "POST",
       credentials: "include",
     }));
+  });
+
+  it("creates an account from a one-time invitation", async () => {
+    window.history.replaceState({}, "", "/#invite=invitation-token-with-enough-characters-123");
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) return Promise.resolve({ ok: false, status: 401 });
+      if (url.endsWith("/auth/register") && options?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => ({ authenticated: true, username: "tester", is_admin: false }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "tester" } });
+    fireEvent.change(screen.getByLabelText("Passwort", { exact: true }), { target: { value: "tester-password-123" } });
+    fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "tester-password-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Konto erstellen" }));
+
+    expect(await screen.findByRole("heading", { name: "Einheit erfassen" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/auth/register", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        invitation_token: "invitation-token-with-enough-characters-123",
+        username: "tester",
+        password: "tester-password-123",
+      }),
+    }));
+  });
+
+  it("opens registration when an invitation is pasted after the login page loaded", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, status: 401 })));
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+
+    window.history.replaceState({}, "", "/#invite=invitation-token-with-enough-characters-456");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+
+    expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Benutzername" })).toHaveValue("");
+  });
+
+  it("lets an administrator create a tester invitation", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => Promise.resolve({
+      ok: true,
+      status: options?.method === "POST" ? 201 : 200,
+      json: async () => url.endsWith("/auth/session")
+        ? { authenticated: true, username: "owner", is_admin: true }
+        : url.endsWith("/auth/invitations")
+          ? { token: "new-invitation-token", expires_at: "2026-08-27T12:00:00Z" }
+          : [],
+    })));
+
+    render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Tester einladen" }));
+
+    expect(await screen.findByRole("heading", { name: "Einladung ist 7 Tage gültig" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Einladungslink" })).toHaveValue(
+      "http://localhost:3000/#invite=new-invitation-token",
+    );
   });
 });
