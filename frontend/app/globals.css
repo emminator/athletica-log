@@ -26,7 +26,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .formRow { display: grid; grid-template-columns: 1fr 180px; gap: 12px; }
 .formRow label { min-width: 0; }
 .formField { min-width: 0; }
-.formFieldDate input[type="date"] { width: 100%; min-width: 0; max-width: 100%; height: var(--control-block-size); min-height: var(--control-block-size); max-height: var(--control-block-size); padding-block: 0; text-align: center; text-align-last: center; }
+.formFieldDate input[type="date"] { width: auto; min-width: 0; max-width: none; align-self: stretch; height: var(--control-block-size); min-height: var(--control-block-size); max-height: var(--control-block-size); padding-block: 0; text-align: center; text-align-last: center; }
 .formFieldDate input[type="date"]::-webkit-date-and-time-value { height: calc(var(--control-block-size) - var(--control-border-size) - var(--control-border-size)); margin: 0; line-height: calc(var(--control-block-size) - var(--control-border-size) - var(--control-border-size)); text-align: center; }
 .formFieldDate input[type="date"]::-webkit-datetime-edit { padding: 0; text-align: center; }
 .setHeader, .actions { display: flex; align-items: center; justify-content: space-between; }
