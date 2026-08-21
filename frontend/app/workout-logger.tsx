@@ -277,7 +277,7 @@ export default function WorkoutLogger() {
         <form onSubmit={saveWorkout}>
           <div className="formRow">
             <label>Titel<input required minLength={2} value={workoutTitle} onChange={(event) => setWorkoutTitle(event.target.value)} placeholder="z. B. Unterkörper A" /></label>
-            <label className="formField formFieldCompact formFieldDate">Datum<input required type="date" value={performedOn} onChange={(event) => setPerformedOn(event.target.value)} /></label>
+            <label className="formField formFieldDate">Datum<input required type="date" value={performedOn} onChange={(event) => setPerformedOn(event.target.value)} /></label>
           </div>
           <div className="setHeader"><span>Sätze</span><b>Gesamtlast: {totalVolume.toLocaleString("de-DE")} kg</b></div>
           {sets.map((set, index) => (
