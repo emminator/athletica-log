@@ -3,7 +3,18 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -16,10 +27,48 @@ class ActivityType(StrEnum):
     OTHER = "other"
 
 
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    user: Mapped[User] = relationship()
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    invited_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    invited_by: Mapped[User] = relationship()
+
+
 class Exercise(Base):
     __tablename__ = "exercises"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_exercises_user_name"),)
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
     muscle_group: Mapped[str | None] = mapped_column(String(80))
     activity_type: Mapped[ActivityType] = mapped_column(Enum(ActivityType, native_enum=False))
 
@@ -27,6 +76,7 @@ class Exercise(Base):
 class Workout(Base):
     __tablename__ = "workouts"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     performed_on: Mapped[date] = mapped_column(Date, index=True)
     title: Mapped[str] = mapped_column(String(160))
     notes: Mapped[str | None] = mapped_column(Text)
@@ -49,4 +99,3 @@ class WorkoutSet(Base):
     effort_rpe: Mapped[Decimal | None] = mapped_column(Numeric(3, 1))
     workout: Mapped[Workout] = relationship(back_populates="sets")
     exercise: Mapped[Exercise] = relationship()
-

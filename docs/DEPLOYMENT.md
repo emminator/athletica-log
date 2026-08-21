@@ -7,9 +7,11 @@ von FastAPI unter derselben Domain wie die API ausgeliefert.
 ## Sicherheitsmodell
 
 - Alle Trainingsendpunkte benötigen eine gültige Anmeldung.
-- Das Passwort liegt nur als scrypt-Hash in Render, niemals im Repository.
-- Die Sitzung wird mit einem zufälligen Render-Secret signiert und als HttpOnly-, Secure- und
-  SameSite-Strict-Cookie gespeichert.
+- Passwörter liegen nur als gesalzene scrypt-Hashes in PostgreSQL, niemals im Repository.
+- Sitzungen verwenden zufällige, nur gehasht gespeicherte Tokens. Der Browser erhält ausschließlich
+  ein HttpOnly-, Secure- und SameSite-Strict-Cookie.
+- Übungen und Trainings tragen eine Benutzer-ID; jede API-Abfrage erzwingt den angemeldeten Besitzer.
+- Neue Konten entstehen nur über zeitlich begrenzte, einmal verwendbare Einladungen eines Admins.
 - Healthchecks bleiben ohne Anmeldung erreichbar; die API-Dokumentation ist produktiv deaktiviert.
 - Die Datenbank ist nur über das private Render-Netzwerk erreichbar.
 
@@ -22,7 +24,23 @@ docker compose exec backend python -m app.auth hash-password
 ```
 
 Nur die ausgegebene Zeile wird beim ersten Blueprint-Setup als `AUTH_PASSWORD_HASH` hinterlegt.
-Das Klartextpasswort wird nicht gespeichert oder an GitHub übertragen.
+Die erste Mehrbenutzer-Migration legt damit das Administratorkonto an und ordnet ihm alle bereits
+vorhandenen Übungen und Trainings zu. Das Klartextpasswort wird nicht gespeichert oder an GitHub
+übertragen.
+
+Ein bestehender Benutzer kann lokal interaktiv ein neues Passwort erhalten:
+
+```powershell
+docker compose exec backend python -m app.auth set-password --username athletica
+```
+
+## Tester einladen
+
+Nach der Anmeldung sieht ein Administrator die Aktion **Tester einladen**. Sie erzeugt einen sieben
+Tage gültigen, einmal verwendbaren Link. Der Tester wählt darüber selbst Benutzername und Passwort.
+Der Link ist wie ein temporäres Zugangsdokument zu behandeln und nur an die vorgesehene Person zu
+übermitteln. Das Einladungstoken liegt im Fragmentteil der URL und wird dadurch nicht an den
+Webserver oder dessen Zugriffsprotokoll übertragen.
 
 ## Ersteinrichtung
 
@@ -36,6 +54,9 @@ Das Klartextpasswort wird nicht gespeichert oder an GitHub übertragen.
 7. Die Custom Domain in Render verifizieren und HTTPS, Anmeldung, Schreiben und Lesen prüfen.
 8. Erst nach erfolgreichem Domain-Test kann die öffentliche `onrender.com`-Adresse deaktiviert
    werden.
+
+Vor dem ersten Deployment der Mehrbenutzer-Migration muss ein aktuelles Datenbankbackup erstellt
+und das verfügbare Wiederherstellungsfenster geprüft werden.
 
 ## CI/CD-Ablauf
 

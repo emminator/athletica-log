@@ -4,8 +4,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.db import Base, get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def stable_test_settings(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", False)
+    monkeypatch.setattr(settings, "session_cookie_secure", False)
 
 
 @pytest.fixture

@@ -23,8 +23,6 @@ services:
         value: athletica
       - key: AUTH_PASSWORD_HASH
         sync: false
-      - key: SESSION_SECRET
-        generateValue: true
       - key: SESSION_COOKIE_SECURE
         value: "true"
       - key: DOCS_ENABLED
