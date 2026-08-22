@@ -136,3 +136,113 @@ def test_non_admin_cannot_create_invitation(
     )
 
     assert client.post("/api/v1/auth/invitations", json={}).status_code == 403
+
+
+def test_user_changes_password_and_all_sessions_are_revoked(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    enable_authentication(monkeypatch)
+    user = add_user(db, "tester", "tester-password-123")
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    )
+
+    incorrect = client.post(
+        "/api/v1/auth/password",
+        json={"current_password": "wrong-password", "new_password": "new-password-456"},
+    )
+    assert incorrect.status_code == 400
+    assert db.scalar(select(UserSession).where(UserSession.user_id == user.id)) is not None
+
+    unchanged = client.post(
+        "/api/v1/auth/password",
+        json={
+            "current_password": "tester-password-123",
+            "new_password": "tester-password-123",
+        },
+    )
+    assert unchanged.status_code == 400
+
+    changed = client.post(
+        "/api/v1/auth/password",
+        json={
+            "current_password": "tester-password-123",
+            "new_password": "new-password-456",
+        },
+    )
+    assert changed.status_code == 204
+    assert db.scalar(select(UserSession).where(UserSession.user_id == user.id)) is None
+    assert client.get("/api/v1/auth/session").status_code == 401
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    ).status_code == 401
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "new-password-456"},
+    ).status_code == 200
+
+
+def test_admin_lists_and_deactivates_testers(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    enable_authentication(monkeypatch)
+    admin = add_user(db, "owner", "owner-test-password", is_admin=True)
+    tester = add_user(db, "tester", "tester-password-123")
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    )
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "owner", "password": "owner-test-password"},
+    )
+
+    users = client.get("/api/v1/auth/users")
+    assert users.status_code == 200
+    assert [(item["username"], item["is_active"]) for item in users.json()] == [
+        ("owner", True),
+        ("tester", True),
+    ]
+
+    deactivated = client.patch(
+        f"/api/v1/auth/users/{tester.id}", json={"is_active": False}
+    )
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+    assert db.scalar(select(UserSession).where(UserSession.user_id == tester.id)) is None
+    assert db.scalar(select(UserSession).where(UserSession.user_id == admin.id)) is not None
+    assert client.patch(
+        f"/api/v1/auth/users/{admin.id}", json={"is_active": False}
+    ).status_code == 400
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    ).status_code == 401
+
+    reactivated = client.patch(
+        f"/api/v1/auth/users/{tester.id}", json={"is_active": True}
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["is_active"] is True
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    ).status_code == 200
+
+
+def test_non_admin_cannot_manage_users(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    enable_authentication(monkeypatch)
+    tester = add_user(db, "tester", "tester-password-123")
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    )
+
+    assert client.get("/api/v1/auth/users").status_code == 403
+    assert client.patch(
+        f"/api/v1/auth/users/{tester.id}", json={"is_active": False}
+    ).status_code == 403

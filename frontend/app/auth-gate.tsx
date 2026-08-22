@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import AccountPanel from "./account-panel";
 import { apiFetch } from "./api";
 import WorkoutLogger from "./workout-logger";
 
@@ -23,6 +24,7 @@ export default function AuthGate() {
     : new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? "");
   const [invitationUrl, setInvitationUrl] = useState("");
   const [message, setMessage] = useState("");
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     apiFetch("/api/v1/auth/session")
@@ -97,7 +99,19 @@ export default function AuthGate() {
     setPassword("");
     setPasswordConfirmation("");
     setInvitationUrl("");
+    setAccountOpen(false);
     setMessage("");
+    setAuthState("anonymous");
+  }
+
+  function passwordChanged(passwordMessage: string) {
+    setUser(null);
+    setUsername("");
+    setPassword("");
+    setPasswordConfirmation("");
+    setInvitationUrl("");
+    setAccountOpen(false);
+    setMessage(passwordMessage);
     setAuthState("anonymous");
   }
 
@@ -154,10 +168,16 @@ export default function AuthGate() {
         <strong>Athletica Log</strong>
         <div className="navActions">
           <span className="currentUser">{user?.username}</span>
-          {user?.is_admin && <button className="navButton" type="button" onClick={createInvitation}>Tester einladen</button>}
+          <button className="navButton" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen((open) => !open)}>Konto</button>
           <button className="navButton" type="button" onClick={logout}>Abmelden</button>
         </div>
       </nav>
+      {accountOpen && user && <AccountPanel
+        user={user}
+        onClose={() => setAccountOpen(false)}
+        onCreateInvitation={createInvitation}
+        onPasswordChanged={passwordChanged}
+      />}
       {invitationUrl && <section className="inviteBanner" aria-labelledby="invite-heading">
         <div><p className="step">TESTZUGANG</p><h2 id="invite-heading">Einladung ist 7 Tage gültig</h2></div>
         <label>Einladungslink<input aria-label="Einladungslink" readOnly value={invitationUrl} /></label>

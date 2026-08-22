@@ -266,11 +266,69 @@ describe("Home", () => {
     })));
 
     render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Konto" }));
     fireEvent.click(await screen.findByRole("button", { name: "Tester einladen" }));
 
     expect(await screen.findByRole("heading", { name: "Einladung ist 7 Tage gültig" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Einladungslink" })).toHaveValue(
       "http://localhost:3000/#invite=new-invitation-token",
     );
+  });
+
+  it("changes the password and returns to login", async () => {
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "tester", is_admin: false }) });
+      }
+      if (url.endsWith("/auth/password") && options?.method === "POST") {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Konto" }));
+    fireEvent.change(screen.getByLabelText("Aktuelles Passwort"), { target: { value: "old-password-123" } });
+    fireEvent.change(screen.getByLabelText("Neues Passwort", { exact: true }), { target: { value: "new-password-456" } });
+    fireEvent.change(screen.getByLabelText("Neues Passwort wiederholen"), { target: { value: "new-password-456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Passwort ändern" }));
+
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Passwort geändert. Bitte melde dich erneut an.");
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/auth/password", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ current_password: "old-password-123", new_password: "new-password-456" }),
+    }));
+  });
+
+  it("lets an administrator deactivate a tester", async () => {
+    const owner = { id: "owner-id", username: "owner", is_admin: true, is_active: true, created_at: "2026-08-20T12:00:00Z" };
+    const tester = { id: "tester-id", username: "tester", is_admin: false, is_active: true, created_at: "2026-08-21T12:00:00Z" };
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "owner", is_admin: true }) });
+      }
+      if (url.endsWith("/auth/users")) {
+        return Promise.resolve({ ok: true, json: async () => [owner, tester] });
+      }
+      if (url.endsWith("/auth/users/tester-id") && options?.method === "PATCH") {
+        return Promise.resolve({ ok: true, json: async () => ({ ...tester, is_active: false }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Konto" }));
+    expect(await screen.findByText("tester")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deaktivieren" }));
+
+    expect(await screen.findByRole("button", { name: "Aktivieren" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("tester wurde deaktiviert und abgemeldet.");
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/auth/users/tester-id", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ is_active: false }),
+    }));
   });
 });

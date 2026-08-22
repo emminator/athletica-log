@@ -6,6 +6,7 @@ import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
@@ -52,6 +53,23 @@ class InvitationCreate(BaseModel):
 class InvitationRead(BaseModel):
     token: str
     expires_at: datetime
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class UserActiveUpdate(BaseModel):
+    is_active: bool
+
+
+class UserRead(BaseModel):
+    id: UUID
+    username: str
+    is_admin: bool
+    is_active: bool
+    created_at: datetime
 
 
 class SessionRead(BaseModel):
@@ -184,6 +202,11 @@ def session_read(user: User) -> SessionRead:
     return SessionRead(authenticated=True, username=user.username, is_admin=user.is_admin)
 
 
+def require_admin(user: User) -> None:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+
 @router.get("/session", response_model=SessionRead)
 def read_session(user: AuthenticatedUser) -> SessionRead:
     return session_read(user)
@@ -247,8 +270,7 @@ def register(
 def create_invitation(
     payload: InvitationCreate, user: AuthenticatedUser, db: DatabaseSession
 ) -> InvitationRead:
-    if not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    require_admin(user)
     raw_token = secrets.token_urlsafe(32)
     now = datetime.now(UTC)
     invitation = Invitation(
@@ -260,6 +282,56 @@ def create_invitation(
     db.add(invitation)
     db.commit()
     return InvitationRead(token=raw_token, expires_at=invitation.expires_at)
+
+
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: PasswordChangeRequest,
+    response: Response,
+    user: AuthenticatedUser,
+    db: DatabaseSession,
+) -> None:
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
+        )
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="New password must be different"
+        )
+    user.password_hash = hash_password(payload.new_password)
+    db.execute(delete(UserSession).where(UserSession.user_id == user.id))
+    db.commit()
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+@router.get("/users", response_model=list[UserRead])
+def list_users(user: AuthenticatedUser, db: DatabaseSession) -> list[User]:
+    require_admin(user)
+    return list(db.scalars(select(User).order_by(User.created_at, User.username)))
+
+
+@router.patch("/users/{user_id}", response_model=UserRead)
+def update_user_status(
+    user_id: UUID,
+    payload: UserActiveUpdate,
+    user: AuthenticatedUser,
+    db: DatabaseSession,
+) -> User:
+    require_admin(user)
+    managed_user = db.get(User, user_id)
+    if managed_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if managed_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Admin accounts cannot be managed here"
+        )
+    managed_user.is_active = payload.is_active
+    if not managed_user.is_active:
+        db.execute(delete(UserSession).where(UserSession.user_id == managed_user.id))
+    db.commit()
+    db.refresh(managed_user)
+    return managed_user
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -294,6 +366,7 @@ def main() -> None:
         if user is None:
             raise SystemExit("User not found")
         user.password_hash = hash_password(password)
+        db.execute(delete(UserSession).where(UserSession.user_id == user.id))
         db.commit()
     print("Password updated")
 

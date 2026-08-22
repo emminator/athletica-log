@@ -42,6 +42,18 @@ Der Link ist wie ein temporäres Zugangsdokument zu behandeln und nur an die vor
 übermitteln. Das Einladungstoken liegt im Fragmentteil der URL und wird dadurch nicht an den
 Webserver oder dessen Zugriffsprotokoll übertragen.
 
+## Konten verwalten
+
+Jeder angemeldete Nutzer kann unter **Konto** sein Passwort ändern. Dafür ist das aktuelle Passwort
+erforderlich; das neue Passwort muss mindestens zwölf Zeichen lang und vom bisherigen verschieden
+sein. Nach einem erfolgreichen Wechsel werden sämtliche Sitzungen dieses Kontos widerrufen und eine
+erneute Anmeldung verlangt.
+
+Administratoren sehen unter **Konto** außerdem alle Konten. Tester können dort deaktiviert und später
+wieder aktiviert werden. Eine Deaktivierung beendet sofort sämtliche Sitzungen, löscht aber weder
+Übungen noch Trainingsdaten. Administratorkonten können über diese Oberfläche nicht deaktiviert
+werden, damit der administrative Zugang nicht versehentlich verloren geht.
+
 ## Ersteinrichtung
 
 1. In Render ein Konto beziehungsweise einen Workspace mit GitHub verbinden.
