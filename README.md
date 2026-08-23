@@ -1,61 +1,126 @@
 # Athletica Log
 
-Athletica Log ist eine private Anwendung zum Erfassen, Auswerten und Planen sportlicher
-Aktivitäten mit Schwerpunkt Krafttraining im Gym.
+Athletica Log is a production-deployed workout logger for recording strength
+training quickly, reviewing past performance, and preparing the next session.
+It is also a compact reference project for building and operating a full-stack
+web product beyond the prototype stage.
 
-## Produktziel
+**Live application:** [athletica.emminger-net.de](https://athletica.emminger-net.de)
 
-Die erste Version soll fünf Fragen zuverlässig beantworten:
+Access is invitation-only because the production instance contains private
+training data. A dedicated reviewer account can be provided on request.
 
-1. Was habe ich trainiert?
-2. Welche Übungen, Gewichte, Wiederholungen und Sätze habe ich absolviert?
-3. Wie entwickeln sich Kraft, Volumen und Trainingshäufigkeit?
-4. Was steht als Nächstes im Trainingsplan?
-5. Wo entstehen persönliche Bestleistungen oder längerfristige Plateaus?
+## What the product can do
 
-## Technische Basis
+- Record workouts with exercises, sets, weight, repetitions, and optional RPE.
+- Prefill the most recent performance when an exercise is selected.
+- Browse set details and calculated training load in the workout history.
+- Duplicate a past workout into an editable session dated today.
+- Edit and delete workouts without changing the source workout when duplicating.
+- Switch the interface between German and English.
+- Use the responsive interface on desktop and mobile devices.
+- Keep exercises and workout data isolated per user.
+- Manage invite-only tester accounts, password changes, one-time password resets,
+  account deactivation, and invitation revocation.
 
-- Next.js/React und TypeScript für die Weboberfläche
-- FastAPI und Python für die API und Geschäftslogik
-- PostgreSQL für Übungen, Pläne und Trainingsdaten
-- Docker Compose für die lokale Entwicklungsumgebung
-- Pytest, Vitest, Ruff, ESLint und TypeScript für Qualitätskontrollen
+## Architecture
 
-## Lokaler Start
+```mermaid
+flowchart LR
+    Browser[Browser / mobile Safari] --> App[FastAPI application]
+    App --> Static[Next.js static export]
+    App --> API[REST API and authentication]
+    API --> DB[(PostgreSQL)]
+    GitHub[GitHub Actions] --> Render[Render deployment]
+    Render --> App
+```
 
-Nach Installation von Docker Desktop:
+The production image contains both the statically exported Next.js frontend and
+the FastAPI backend. Serving them from one origin keeps deployment and cookie
+security straightforward. PostgreSQL runs as a private managed database. Alembic
+migrations run before each production deployment.
+
+## Technology
+
+| Area | Stack |
+| --- | --- |
+| Frontend | Next.js, React, TypeScript |
+| Backend | FastAPI, Python, SQLAlchemy, Alembic |
+| Database | PostgreSQL |
+| Local development | Docker Compose |
+| Production | Docker, Render, custom domain, managed TLS |
+| Quality | Pytest, Vitest, Ruff, ESLint, TypeScript |
+| Delivery | GitHub Actions with gated Render auto-deploys |
+
+## Engineering highlights
+
+- Session and one-time tokens are stored as hashes; passwords use `scrypt`.
+- Authorization is enforced server-side and all user-owned queries are scoped to
+  the authenticated user.
+- Production enables secure cookies and HSTS, disables API documentation, and
+  keeps the database off the public network.
+- Liveness and readiness endpoints, release identifiers, request IDs, structured
+  request logging, and deployment smoke tests support production diagnostics.
+- CI builds and tests both the development stack and the actual production image
+  before Render can deploy `main`.
+- Operational, recovery, deployment, and release procedures are documented in the
+  repository.
+
+## Run locally
+
+Docker Desktop is the only local prerequisite.
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Anschließend:
+The local environment starts with authentication disabled and preserves its data
+in named Docker volumes.
 
-- Anwendung: http://localhost:3000
-- API-Dokumentation: http://localhost:8000/docs
-- API-Status: http://localhost:8000/health/ready
+- Application: [http://localhost:3000](http://localhost:3000)
+- API documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Readiness check: [http://localhost:8000/health/ready](http://localhost:8000/health/ready)
 
-## Aktueller Umfang
+Do not use `docker compose down --volumes` unless deleting the local database is
+intentional.
 
-Das Projekt enthält ein professionelles Grundgerüst und den ersten durchgängigen MVP-Schnitt:
-Übungen können angelegt und Trainingseinheiten mit mehreren Sätzen, Gewicht, Wiederholungen und
-RPE gespeichert werden. Einladungsbasierte Benutzerkonten trennen Übungen und Trainingsdaten
-konsequent pro Person. Nutzer können ihr Passwort selbst ändern; Administratoren können Testkonten
-deaktivieren, offene Einladungen widerrufen und zeitlich begrenzte Einmal-Links zum Zurücksetzen
-eines Tester-Passworts erstellen, ohne Trainingsdaten zu löschen. Trainingshistorie, Diagramme und
-Planung folgen in kleinen, testbaren Schritten.
+## Quality checks
 
-Beim Start wendet das Backend ausstehende Datenbankmigrationen automatisch an. Manuell lässt sich
-der aktuelle Stand mit `docker compose exec backend alembic current` kontrollieren.
+All project checks run inside the existing Docker environment:
 
-## Produktivbetrieb
+```powershell
+docker compose exec backend ruff check .
+docker compose exec backend python -m pytest -q
+docker compose exec frontend pnpm lint
+docker compose exec frontend pnpm typecheck
+docker compose exec frontend pnpm test
+```
 
-Die vorgesehene Render-Konfiguration liegt in `render.yaml`. Sie erstellt einen Docker-Webdienst
-und eine private PostgreSQL-Datenbank in Frankfurt und veröffentlicht die Anwendung unter
-`athletica.emminger-net.de`. Einrichtung, Login-Sicherheit und CI/CD-Ablauf sind in
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) beschrieben.
+## Repository layout
 
-Für Releases und laufenden Betrieb gelten zusätzlich das
-[`Betriebs- und Notfallhandbuch`](docs/OPERATIONS.md) und die
-[`Release-Checkliste`](docs/RELEASE_CHECKLIST.md).
+```text
+backend/             FastAPI application, persistence, migrations, and tests
+frontend/            Next.js interface and component tests
+docs/                Product, deployment, operations, and release documentation
+.github/workflows/   Continuous integration
+compose.yaml         Local development stack
+Dockerfile           Production image
+render.yaml          Production infrastructure blueprint
+```
+
+## Product and operations documentation
+
+- [Product direction](docs/PRODUCT.md)
+- [Deployment guide](docs/DEPLOYMENT.md)
+- [Operations and recovery guide](docs/OPERATIONS.md)
+- [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Portfolio demo readiness](docs/DEMO_READINESS.md)
+
+## Current scope and next steps
+
+Athletica Log is a working strength-training MVP, not a finished fitness
+platform. Templates and workout planning, deeper analytics, historical data
+import, and offline support remain intentional future increments. The
+[demo-readiness checklist](docs/DEMO_READINESS.md) separates product roadmap
+ideas from the smaller steps required to present the current application safely.
