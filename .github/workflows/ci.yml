@@ -45,3 +45,27 @@ jobs:
         uses: actions/checkout@v6
       - name: Build production image
         run: docker build --tag athletica-log:${{ github.sha }} .
+      - name: Start production image
+        run: >-
+          docker run --detach --name athletica-production-test --publish 8000:8000
+          --env DATABASE_URL=sqlite:////tmp/athletica-smoke.db
+          --env AUTH_ENABLED=false
+          --env RENDER_GIT_COMMIT=${{ github.sha }}
+          athletica-log:${{ github.sha }}
+      - name: Wait for production image
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8000/health/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs athletica-production-test
+          exit 1
+      - name: Smoke-test production image
+        run: |
+          curl --fail --silent http://localhost:8000/health/live | grep --fixed-strings "${GITHUB_SHA:0:12}"
+          curl --fail --silent http://localhost:8000/ | grep --fixed-strings "Athletica Log"
+      - name: Stop production image
+        if: always()
+        run: docker rm --force athletica-production-test

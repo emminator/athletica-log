@@ -112,3 +112,6 @@ GitHub Actions und Render der Fall ist. Zertifikatsprüfungen werden niemals dea
 - Datenbankmigrationen müssen abwärtskompatibel sein und vor dem Merge getestet werden.
 - Vor riskanten Datenänderungen wird ein aktuelles Backup beziehungsweise Restore-Fenster geprüft.
 - Der Render-Status und fehlgeschlagene GitHub-Checks werden bei Deployments kontrolliert.
+- Das tägliche Vorgehen, Monitoring, Backup und Rollback beschreibt
+  [`OPERATIONS.md`](OPERATIONS.md). Vor jedem Release wird
+  [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) verwendet.
