@@ -13,10 +13,9 @@ from app.db import engine
 from app.observability import (
     REQUEST_ID_HEADER,
     add_response_headers,
+    initialize_request,
     log_request,
-    reset_request_context,
     should_log_request,
-    start_request_context,
 )
 
 settings = get_settings()
@@ -41,15 +40,12 @@ app.include_router(api_router)
 
 @app.middleware("http")
 async def observe_request(request: Request, call_next) -> Response:
-    context_token = start_request_context(request)
-    try:
-        response = await call_next(request)
-        add_response_headers(request, response, settings)
-        if should_log_request(request, response.status_code):
-            log_request(request, response.status_code)
-        return response
-    finally:
-        reset_request_context(context_token)
+    initialize_request(request)
+    response = await call_next(request)
+    add_response_headers(request, response, settings)
+    if should_log_request(request, response.status_code):
+        log_request(request, response.status_code)
+    return response
 
 
 @app.exception_handler(Exception)

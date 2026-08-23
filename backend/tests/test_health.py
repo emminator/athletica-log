@@ -2,30 +2,27 @@ import json
 import logging
 
 import pytest
-from fastapi import Request
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
 from app.main import app
-from app.observability import JsonLogFormatter, get_request_id, request_logger
+from app.observability import JsonLogFormatter, request_logger
 
-TEST_CONTEXT_PATH = "/_test/request-context"
 TEST_ERROR_PATH = "/_test/unexpected-error"
-
-
-def request_context(request: Request) -> dict[str, str]:
-    return {
-        "state_request_id": request.state.request_id,
-        "context_request_id": get_request_id(),
-    }
+TEST_HTTP_ERROR_PATH = "/_test/expected-http-error"
 
 
 def unexpected_error() -> None:
     raise RuntimeError("expected test error")
 
 
-app.add_api_route(TEST_CONTEXT_PATH, request_context, methods=["GET"])
+def expected_http_error() -> None:
+    raise HTTPException(status_code=409, detail="expected conflict")
+
+
 app.add_api_route(TEST_ERROR_PATH, unexpected_error, methods=["GET"])
+app.add_api_route(TEST_HTTP_ERROR_PATH, expected_http_error, methods=["GET"])
 
 
 def test_liveness(client: TestClient) -> None:
@@ -70,7 +67,7 @@ def test_hsts_is_independent_from_secure_session_cookies(
     )
 
 
-def test_request_id_is_available_in_context_and_cf_ray_is_logged_separately(
+def test_request_id_is_stored_on_request_and_cf_ray_is_logged_separately(
     client: TestClient,
 ) -> None:
     records: list[logging.LogRecord] = []
@@ -82,21 +79,17 @@ def test_request_id_is_available_in_context_and_cf_ray_is_logged_separately(
     handler = RecordingHandler()
     request_logger.addHandler(handler)
     try:
-        response = client.get(TEST_CONTEXT_PATH, headers={"CF-Ray": "cloudflare-ray-id"})
+        response = client.get("/api/v1", headers={"CF-Ray": "cloudflare-ray-id"})
     finally:
         request_logger.removeHandler(handler)
 
     request_id = response.headers["x-request-id"]
     assert request_id != "cloudflare-ray-id"
-    assert response.json() == {
-        "state_request_id": request_id,
-        "context_request_id": request_id,
-    }
     record = records[-1]
     assert record.request_id == request_id
     assert record.cf_ray == "cloudflare-ray-id"
     assert record.method == "GET"
-    assert record.path == TEST_CONTEXT_PATH
+    assert record.path == "/api/v1"
     assert record.status == 200
     assert isinstance(record.duration_ms, float)
     structured_log = json.loads(JsonLogFormatter().format(record))
@@ -126,6 +119,16 @@ def test_unexpected_error_returns_request_id_and_safe_response() -> None:
     assert records[-1].exc_info is not None
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_expected_http_error_is_not_replaced_by_global_error_handler(
+    client: TestClient,
+) -> None:
+    response = client.get(TEST_HTTP_ERROR_PATH)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "expected conflict"}
+    assert response.headers["x-request-id"]
 
 
 def test_cache_policy_has_explicit_route_boundaries(client: TestClient) -> None:

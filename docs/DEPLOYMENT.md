@@ -16,6 +16,9 @@ von FastAPI unter derselben Domain wie die API ausgeliefert.
 - Einladungs- und Passwort-Reset-Tokens liegen ausschließlich als SHA-256-Hash in der Datenbank.
   Neue Reset-Links widerrufen automatisch noch offene ältere Links desselben Testers.
 - Healthchecks bleiben ohne Anmeldung erreichbar; die API-Dokumentation ist produktiv deaktiviert.
+- Ein globaler Fehlerhandler vereinheitlicht ausschließlich unerwartete Fehler als generische
+  HTTP-500-Antwort und liefert dabei dieselbe Request-ID wie das strukturierte Fehlerlog.
+  Spezifische FastAPI-/Starlette-Fehler wie 401, 404 oder Validierungsfehler bleiben unverändert.
 - Die Datenbank ist nur über das private Render-Netzwerk erreichbar.
 
 ## Passwort-Hash erzeugen

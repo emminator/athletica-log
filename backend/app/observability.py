@@ -1,6 +1,5 @@
 import json
 import logging
-from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from time import perf_counter
 from uuid import uuid4
@@ -19,9 +18,6 @@ STRUCTURED_LOG_FIELDS = (
     "duration_ms",
     "cf_ray",
 )
-request_id_context: ContextVar[str] = ContextVar("request_id", default="")
-
-
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
@@ -52,23 +48,14 @@ def configure_request_logger() -> logging.Logger:
 request_logger = configure_request_logger()
 
 
-def start_request_context(request: Request) -> Token[str]:
+def initialize_request(request: Request) -> None:
     request_id = uuid4().hex
     request.state.request_id = request_id
     request.state.started_at = perf_counter()
-    return request_id_context.set(request_id)
 
 
-def get_request_id(request: Request | None = None) -> str:
-    if request is not None:
-        request_id = getattr(request.state, "request_id", "")
-        if request_id:
-            return request_id
-    return request_id_context.get()
-
-
-def reset_request_context(token: Token[str]) -> None:
-    request_id_context.reset(token)
+def get_request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "")
 
 
 def add_security_headers(response: Response, settings: Settings) -> None:
