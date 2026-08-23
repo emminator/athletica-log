@@ -13,6 +13,10 @@ focuses on the product's core workflow and a few engineering decisions behind it
 The reviewer account contains synthetic data only and is isolated from every
 other user's exercises and workouts.
 
+The shared account is intended for controlled, one-at-a-time reviews. For wider
+distribution, separate reviewer accounts or a resettable demo dataset should be
+used instead.
+
 ## Suggested tour
 
 ### 1. Review a progression
@@ -43,7 +47,8 @@ Avoid saving if the shared dataset should remain unchanged.
 - GitHub Actions runs backend and frontend quality checks and smoke-tests the
   production image before Render can deploy `main`.
 - Health endpoints, release identifiers, structured request logging, migrations,
-  backups, and recovery procedures support continued operation after launch.
+  and documented backup and recovery procedures support production operations.
+  A verified restore drill remains a planned hardening step.
 
 ## Intentional boundaries
 
