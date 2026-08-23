@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import AccountPanel from "./account-panel";
 import { apiFetch } from "./api";
 import { LanguageSwitcher, useLanguage } from "./language";
+import { isValidUsername } from "./username";
 import WorkoutLogger from "./workout-logger";
 
 type AuthState = "checking" | "authenticated" | "anonymous" | "registering" | "resetting";
@@ -73,6 +74,10 @@ export default function AuthGate() {
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    if (!isValidUsername(username)) {
+      setMessage(t.auth.invalidUsername);
+      return;
+    }
     const response = await apiFetch("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -90,6 +95,10 @@ export default function AuthGate() {
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    if (!isValidUsername(username)) {
+      setMessage(t.auth.invalidUsername);
+      return;
+    }
     if (password !== passwordConfirmation) {
       setMessage(t.auth.passwordsMismatch);
       return;
@@ -195,7 +204,13 @@ export default function AuthGate() {
               ? t.auth.resetIntro
             : t.auth.signInIntro}</p>
           <form onSubmit={registering ? register : resetting ? resetPassword : login}>
-            {!resetting && <label>{t.auth.username}<input required minLength={3} maxLength={32} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>}
+            {!resetting && <div className="authField">
+              <label htmlFor="username">{t.auth.username}<input id="username" required maxLength={32} autoComplete="username" autoCapitalize="none" spellCheck={false} aria-describedby="username-requirements" value={username} onChange={(event) => {
+                setUsername(event.target.value);
+                if (message === t.auth.invalidUsername) setMessage("");
+              }} /></label>
+              <span className="fieldHint" id="username-requirements">{t.auth.usernameRequirements}</span>
+            </div>}
             <label>{resetting ? t.auth.newPassword : t.auth.password}<input required minLength={registering || resetting ? 12 : 1} type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
             {(registering || resetting) && <label>{resetting ? t.auth.repeatNewPassword : t.auth.repeatPassword}<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>}
             {message && <p className="message" role="alert">{message}</p>}

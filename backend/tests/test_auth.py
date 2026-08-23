@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -44,7 +45,7 @@ def test_protected_api_requires_database_login(
 
     login = client.post(
         "/api/v1/auth/login",
-        json={"username": "ATHLETICA", "password": "a-strong-test-password"},
+        json={"username": "athletica", "password": "a-strong-test-password"},
     )
     assert login.status_code == 200
     assert login.json() == {
@@ -102,7 +103,7 @@ def test_admin_invitation_registers_user_once(
         "/api/v1/auth/register",
         json={
             "invitation_token": invitation_token,
-            "username": "Tester",
+            "username": "tester",
             "password": "tester-password-123",
         },
     )
@@ -124,6 +125,30 @@ def test_admin_invitation_registers_user_once(
         },
     )
     assert reused.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "username",
+    ["Tester", " tester", "tester ", "new tester", "new%tester", "_tester"],
+)
+def test_username_rules_are_enforced_for_all_auth_clients(
+    client: TestClient, username: str
+) -> None:
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": "a-strong-test-password"},
+    )
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={
+            "invitation_token": "valid-length-invitation-token-123",
+            "username": username,
+            "password": "a-strong-test-password",
+        },
+    )
+
+    assert login.status_code == 422
+    assert registration.status_code == 422
 
 
 def test_non_admin_cannot_create_invitation(

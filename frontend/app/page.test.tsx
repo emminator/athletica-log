@@ -260,6 +260,46 @@ describe("Home", () => {
     }));
   });
 
+  it("explains invalid usernames before creating an account", async () => {
+    window.history.replaceState({}, "", "/#invite=invitation-token-with-enough-characters-789");
+    const fetchMock = vi.fn((url: string) => Promise.resolve({
+      ok: !url.endsWith("/auth/session"),
+      status: url.endsWith("/auth/session") ? 401 : 200,
+      json: async () => [],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
+    expect(screen.getByText(/3–32 Zeichen.*beginnt mit Kleinbuchstabe oder Zahl.*Punkt, _ und -/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "Neuer Tester" } });
+    fireEvent.change(screen.getByLabelText("Passwort", { exact: true }), { target: { value: "tester-password-123" } });
+    fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "tester-password-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Konto erstellen" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("verwende nur Kleinbuchstaben, Zahlen, Punkt, _ oder -");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/register"))).toBe(false);
+  });
+
+  it("explains invalid usernames before attempting login", async () => {
+    const fetchMock = vi.fn((url: string) => Promise.resolve({
+      ok: false,
+      status: url.endsWith("/auth/session") ? 401 : 422,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Englisch" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "new%tester" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "a-strong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("use only lowercase letters, numbers, periods, underscores, or hyphens");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
+  });
+
   it("opens registration when an invitation is pasted after the login page loaded", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, status: 401 })));
 

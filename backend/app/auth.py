@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StringConstraints, TypeAdapter, ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -25,25 +25,22 @@ SCRYPT_P = 1
 USERNAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{2,31}$"
 
 
-class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=32)
-    password: str = Field(min_length=1, max_length=256)
+Username = Annotated[
+    str,
+    StringConstraints(min_length=3, max_length=32, pattern=USERNAME_PATTERN),
+]
+username_adapter = TypeAdapter(Username)
 
-    @field_validator("username", mode="before")
-    @classmethod
-    def normalize_username(cls, value: str) -> str:
-        return value.strip().lower()
+
+class LoginRequest(BaseModel):
+    username: Username
+    password: str = Field(min_length=1, max_length=256)
 
 
 class RegistrationRequest(BaseModel):
     invitation_token: str = Field(min_length=32, max_length=256)
-    username: str = Field(min_length=3, max_length=32, pattern=USERNAME_PATTERN)
+    username: Username
     password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("username", mode="before")
-    @classmethod
-    def normalize_username(cls, value: str) -> str:
-        return value.strip().lower()
 
 
 class InvitationCreate(BaseModel):
@@ -146,7 +143,7 @@ def as_utc(value: datetime) -> datetime:
 
 
 def get_or_create_bootstrap_user(db: Session, settings: Settings) -> User:
-    username = settings.auth_username.strip().lower()
+    username = username_adapter.validate_python(settings.auth_username)
     user = db.scalar(select(User).where(User.username == username))
     if user is not None:
         return user
@@ -517,7 +514,11 @@ def main() -> None:
     from app.db import SessionLocal
 
     with SessionLocal() as db:
-        user = db.scalar(select(User).where(User.username == args.username.strip().lower()))
+        try:
+            username = username_adapter.validate_python(args.username)
+        except ValidationError as error:
+            raise SystemExit("--username must use the canonical username format") from error
+        user = db.scalar(select(User).where(User.username == username))
         if user is None:
             raise SystemExit("User not found")
         user.password_hash = hash_password(password)
