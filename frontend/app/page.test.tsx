@@ -277,7 +277,7 @@ describe("Home", () => {
     fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "tester-password-123" } });
     fireEvent.click(screen.getByRole("button", { name: "Konto erstellen" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Leerzeichen sind nicht erlaubt.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Leerzeichen und andere Sonderzeichen sind nicht erlaubt.");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/register"))).toBe(false);
   });
 
@@ -292,11 +292,11 @@ describe("Home", () => {
     expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Englisch" }));
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "New Tester" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "new%tester" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "a-strong-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Spaces are not allowed.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Spaces and other special characters are not allowed.");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
   });
 
