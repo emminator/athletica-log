@@ -4,10 +4,13 @@ body { margin: 0; background: radial-gradient(circle at 82% 8%, #263329 0, #0b0d
 button, input, select { font: inherit; }
 main { max-width: 1180px; min-height: 100vh; margin: auto; padding: 0 28px 80px; }
 nav { height: 82px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2c332e; }
-nav strong { font-size: 1.2rem; letter-spacing: -.03em; } nav span { color: #aab0ab; font-size: .9rem; }
-.navActions { display: flex; align-items: center; gap: 18px; }
+nav strong { font-size: 1.2rem; letter-spacing: -.03em; white-space: nowrap; } nav span { color: #aab0ab; font-size: .9rem; }
+.navActions { display: flex; flex-shrink: 0; align-items: center; gap: 18px; }
 .currentUser { color: #b8ff55; font-weight: 700; }
-.navButton { padding: 8px 11px; background: transparent; border: 1px solid #384039; color: #dce1dc; font-size: .78rem; }
+.navButton { padding: 8px 11px; background: transparent; border: 1px solid #384039; color: #dce1dc; font-size: .78rem; white-space: nowrap; }
+.languageSwitcher { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #384039; border-radius: 3px; background: #0e110f; }
+.languageSwitcher button { min-width: 34px; padding: 6px 8px; border-radius: 2px; background: transparent; color: #8e968f; font-size: .68rem; letter-spacing: .05em; }
+.languageSwitcher button[aria-pressed="true"] { background: #2a332b; color: #b8ff55; }
 header { max-width: 860px; padding: 10vh 0 7vh; }
 .eyebrow, .step { color: #b8ff55; font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
 h1 { margin: 18px 0 24px; font-size: clamp(3.2rem, 7vw, 6.5rem); line-height: .9; letter-spacing: -.065em; }
@@ -57,6 +60,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .danger { background: #3a2020; color: #ffb8b8; }
 .authShell { display: grid; min-height: 100vh; place-items: center; padding: 28px; }
 .loginPanel { width: min(100%, 430px); border: 1px solid #2c332e; background: rgba(17, 20, 18, .94); padding: clamp(28px, 6vw, 48px); }
+.loginPanel > .languageSwitcher { display: flex; width: fit-content; margin: 0 0 28px auto; }
 .loginPanel h1 { margin: 12px 0 18px; font-size: clamp(2.5rem, 8vw, 4rem); }
 .loginPanel .intro { margin-bottom: 28px; font-size: 1rem; }
 .authAlternative { margin-top: 18px; padding: 0; background: transparent; color: #959c97; font-size: .8rem; }
@@ -102,7 +106,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   .actionsExpanded .actionGroup button[type="submit"] { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
+  main { padding-inline: 18px; }
   nav span { display: none; }
+  .navActions { gap: 7px; }
+  .navButton { padding-inline: 8px; }
   header { padding-top: 8vh; }
   .accountPanel { padding: 18px; }
   .accountPanelHeader, .accountSectionHeader { align-items: stretch; flex-direction: column; }

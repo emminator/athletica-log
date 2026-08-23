@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { apiFetch } from "./api";
+import { useLanguage } from "./language";
 
 type SessionUser = {
   authenticated: true;
@@ -54,12 +55,14 @@ export default function AccountPanel({
   onAccessLink,
   onPasswordChanged,
 }: AccountPanelProps) {
+  const { locale, t } = useLanguage();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [openInvitations, setOpenInvitations] = useState<OpenInvitation[]>([]);
   const [message, setMessage] = useState("");
+  const [adminLoadFailed, setAdminLoadFailed] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(user.is_admin);
   const [busyAction, setBusyAction] = useState("");
 
@@ -69,11 +72,12 @@ export default function AccountPanel({
     fetchAdminData()
       .then(([users, invitations]) => {
         if (!active) return;
+        setAdminLoadFailed(false);
         setManagedUsers(users);
         setOpenInvitations(invitations);
       })
       .catch(() => {
-        if (active) setMessage("Die Kontoverwaltung konnte nicht geladen werden.");
+        if (active) setAdminLoadFailed(true);
       })
       .finally(() => {
         if (active) setLoadingUsers(false);
@@ -85,7 +89,7 @@ export default function AccountPanel({
     event.preventDefault();
     setMessage("");
     if (newPassword !== passwordConfirmation) {
-      setMessage("Die neuen Passwörter stimmen nicht überein.");
+      setMessage(t.account.newPasswordsMismatch);
       return;
     }
     const response = await apiFetch("/api/v1/auth/password", {
@@ -95,14 +99,14 @@ export default function AccountPanel({
     }).catch(() => null);
     if (!response?.ok) {
       setMessage(response?.status === 400
-        ? "Prüfe das aktuelle Passwort und verwende ein neues Passwort."
-        : "Das Passwort konnte nicht geändert werden.");
+        ? t.account.passwordCheckError
+        : t.account.passwordChangeError);
       return;
     }
     setCurrentPassword("");
     setNewPassword("");
     setPasswordConfirmation("");
-    onPasswordChanged("Passwort geändert. Bitte melde dich erneut an.");
+    onPasswordChanged(t.account.passwordChanged);
   }
 
   async function updateUser(managedUser: ManagedUser) {
@@ -114,15 +118,15 @@ export default function AccountPanel({
       body: JSON.stringify({ is_active: !managedUser.is_active }),
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage("Der Kontostatus konnte nicht geändert werden.");
+      setMessage(t.account.statusError);
       setBusyAction("");
       return;
     }
     const updated = (await response.json()) as ManagedUser;
     setManagedUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
     setMessage(updated.is_active
-      ? `${updated.username} wurde aktiviert.`
-      : `${updated.username} wurde deaktiviert und abgemeldet.`);
+      ? t.account.activated(updated.username)
+      : t.account.deactivated(updated.username));
     setBusyAction("");
   }
 
@@ -135,14 +139,14 @@ export default function AccountPanel({
       body: JSON.stringify({ expires_in_days: 7 }),
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage("Einladung konnte nicht erstellt werden.");
+      setMessage(t.account.invitationCreateError);
       setBusyAction("");
       return;
     }
     const invitation = (await response.json()) as { token: string; expires_at: string };
     onAccessLink({
-      heading: "Einladung ist 7 Tage gültig",
-      label: "Einladungslink",
+      heading: t.account.invitationHeading,
+      label: t.account.invitationLink,
       url: `${window.location.origin}/#invite=${encodeURIComponent(invitation.token)}`,
     });
     await fetchAdminData()
@@ -150,7 +154,7 @@ export default function AccountPanel({
         setManagedUsers(users);
         setOpenInvitations(invitations);
       })
-      .catch(() => setMessage("Die Einladung wurde erstellt, die Liste aber nicht aktualisiert."));
+      .catch(() => setMessage(t.account.invitationRefreshError));
     setBusyAction("");
   }
 
@@ -161,10 +165,10 @@ export default function AccountPanel({
       method: "DELETE",
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage("Die Einladung konnte nicht widerrufen werden.");
+      setMessage(t.account.invitationRevokeError);
     } else {
       setOpenInvitations((current) => current.filter((item) => item.id !== invitation.id));
-      setMessage("Die Einladung wurde widerrufen.");
+      setMessage(t.account.invitationRevoked);
     }
     setBusyAction("");
   }
@@ -178,14 +182,14 @@ export default function AccountPanel({
       body: JSON.stringify({ expires_in_hours: 1 }),
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage("Der Link zum Zurücksetzen konnte nicht erstellt werden.");
+      setMessage(t.account.resetCreateError);
       setBusyAction("");
       return;
     }
     const reset = (await response.json()) as { token: string; expires_at: string };
     onAccessLink({
-      heading: `Passwort-Reset für ${managedUser.username} · 1 Stunde gültig`,
-      label: "Reset-Link",
+      heading: t.account.resetHeading(managedUser.username),
+      label: t.account.resetLink,
       url: `${window.location.origin}/#reset=${encodeURIComponent(reset.token)}`,
     });
     setBusyAction("");
@@ -194,58 +198,58 @@ export default function AccountPanel({
   return (
     <section className="accountPanel" aria-labelledby="account-heading">
       <div className="accountPanelHeader">
-        <div><p className="step">KONTO</p><h2 id="account-heading">Zugang verwalten</h2></div>
-        <button className="secondary" type="button" onClick={onClose}>Schließen</button>
+        <div><p className="step">{t.account.eyebrow}</p><h2 id="account-heading">{t.account.heading}</h2></div>
+        <button className="secondary" type="button" onClick={onClose}>{t.common.close}</button>
       </div>
       <div className="accountGrid">
         <form className="accountPassword" onSubmit={changePassword}>
-          <h3>Passwort ändern</h3>
-          <label>Aktuelles Passwort<input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
-          <label>Neues Passwort<input required minLength={12} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
-          <label>Neues Passwort wiederholen<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>
-          <button type="submit">Passwort ändern</button>
+          <h3>{t.account.changePassword}</h3>
+          <label>{t.account.currentPassword}<input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+          <label>{t.account.newPassword}<input required minLength={12} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+          <label>{t.account.repeatNewPassword}<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>
+          <button type="submit">{t.account.changePassword}</button>
         </form>
         {user.is_admin && <section className="accountAdmin" aria-labelledby="users-heading">
           <div className="accountSectionHeader">
-            <div><h3 id="users-heading">Tester verwalten</h3><p>Deaktivieren meldet ein Konto sofort ab, erhält aber alle Trainingsdaten.</p></div>
-            <button type="button" disabled={busyAction === "create-invitation"} onClick={createInvitation}>Tester einladen</button>
+            <div><h3 id="users-heading">{t.account.manageTesters}</h3><p>{t.account.testerHint}</p></div>
+            <button type="button" disabled={busyAction === "create-invitation"} onClick={createInvitation}>{t.account.inviteTester}</button>
           </div>
           {loadingUsers
-            ? <p className="hint" role="status">Konten werden geladen …</p>
+            ? <p className="hint" role="status">{t.account.loading}</p>
             : <ul className="accountList">{managedUsers.map((managedUser) => <li key={managedUser.id}>
-              <div className="accountIdentity"><strong>{managedUser.username}</strong><span>{managedUser.is_admin ? "Administrator" : managedUser.is_active ? "Aktiv" : "Deaktiviert"}</span></div>
+              <div className="accountIdentity"><strong>{managedUser.username}</strong><span>{managedUser.is_admin ? t.account.administrator : managedUser.is_active ? t.account.active : t.account.inactive}</span></div>
               {!managedUser.is_admin && <div className="accountListActions">
                 {managedUser.is_active && <button
                   className="secondary"
                   type="button"
                   disabled={busyAction !== ""}
                   onClick={() => createPasswordReset(managedUser)}
-                >Passwort zurücksetzen</button>}
+                >{t.account.resetPassword}</button>}
                 <button
                   className={managedUser.is_active ? "danger" : "secondary"}
                   type="button"
                   disabled={busyAction !== ""}
                   onClick={() => updateUser(managedUser)}
-                >{managedUser.is_active ? "Deaktivieren" : "Aktivieren"}</button>
+                >{managedUser.is_active ? t.account.deactivate : t.account.activate}</button>
               </div>}
             </li>)}</ul>}
           <div className="accountSubsection">
-            <h3>Offene Einladungen</h3>
+            <h3>{t.account.openInvitations}</h3>
             {openInvitations.length === 0
-              ? <p className="hint">Keine offenen Einladungen.</p>
+              ? <p className="hint">{t.account.noInvitations}</p>
               : <ul className="accountList">{openInvitations.map((invitation) => <li key={invitation.id}>
-                <div className="accountIdentity"><strong>Tester-Einladung</strong><span>Gültig bis {new Date(invitation.expires_at).toLocaleString("de-DE")}</span></div>
+                <div className="accountIdentity"><strong>{t.account.testerInvitation}</strong><span>{t.account.validUntil(new Date(invitation.expires_at).toLocaleString(locale))}</span></div>
                 <button
                   className="danger"
                   type="button"
                   disabled={busyAction !== ""}
                   onClick={() => revokeInvitation(invitation)}
-                >Widerrufen</button>
+                >{t.account.revoke}</button>
               </li>)}</ul>}
           </div>
         </section>}
       </div>
-      {message && <p className="message accountMessage" role="status">{message}</p>}
+      {(message || adminLoadFailed) && <p className="message accountMessage" role="status">{message || t.account.loadError}</p>}
     </section>
   );
 }
