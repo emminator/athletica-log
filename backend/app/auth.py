@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -25,25 +25,26 @@ SCRYPT_P = 1
 USERNAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{2,31}$"
 
 
-class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=32)
-    password: str = Field(min_length=1, max_length=256)
+def normalize_username(value: object) -> object:
+    return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("username", mode="before")
-    @classmethod
-    def normalize_username(cls, value: str) -> str:
-        return value.strip().lower()
+
+Username = Annotated[
+    str,
+    StringConstraints(min_length=3, max_length=32, pattern=USERNAME_PATTERN),
+    BeforeValidator(normalize_username),
+]
+
+
+class LoginRequest(BaseModel):
+    username: Username
+    password: str = Field(min_length=1, max_length=256)
 
 
 class RegistrationRequest(BaseModel):
     invitation_token: str = Field(min_length=32, max_length=256)
-    username: str = Field(min_length=3, max_length=32, pattern=USERNAME_PATTERN)
+    username: Username
     password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("username", mode="before")
-    @classmethod
-    def normalize_username(cls, value: str) -> str:
-        return value.strip().lower()
 
 
 class InvitationCreate(BaseModel):

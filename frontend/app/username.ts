@@ -5,5 +5,5 @@ export function normalizeUsername(username: string) {
 }
 
 export function isValidUsername(username: string) {
-  return usernamePattern.test(username);
+  return usernamePattern.test(normalizeUsername(username));
 }
