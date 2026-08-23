@@ -244,7 +244,7 @@ describe("Home", () => {
 
     render(<Home />);
     expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: " Tester " } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "tester" } });
     fireEvent.change(screen.getByLabelText("Passwort", { exact: true }), { target: { value: "tester-password-123" } });
     fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "tester-password-123" } });
     fireEvent.click(screen.getByRole("button", { name: "Konto erstellen" }));
@@ -271,13 +271,13 @@ describe("Home", () => {
 
     render(<Home />);
     expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
-    expect(screen.getByText(/3–32 Zeichen.*beginnt mit Buchstabe oder Zahl.*Punkt, _ und -/)).toBeInTheDocument();
+    expect(screen.getByText(/3–32 Zeichen.*beginnt mit Kleinbuchstabe oder Zahl.*Punkt, _ und -/)).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "Neuer Tester" } });
     fireEvent.change(screen.getByLabelText("Passwort", { exact: true }), { target: { value: "tester-password-123" } });
     fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "tester-password-123" } });
     fireEvent.click(screen.getByRole("button", { name: "Konto erstellen" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("verwende nur Buchstaben, Zahlen, Punkt, _ oder -");
+    expect(await screen.findByRole("alert")).toHaveTextContent("verwende nur Kleinbuchstaben, Zahlen, Punkt, _ oder -");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/register"))).toBe(false);
   });
 
@@ -296,7 +296,7 @@ describe("Home", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "a-strong-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("use only letters, numbers, periods, underscores, or hyphens");
+    expect(await screen.findByRole("alert")).toHaveTextContent("use only lowercase letters, numbers, periods, underscores, or hyphens");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
   });
 

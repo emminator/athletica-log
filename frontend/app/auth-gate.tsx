@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import AccountPanel from "./account-panel";
 import { apiFetch } from "./api";
 import { LanguageSwitcher, useLanguage } from "./language";
-import { isValidUsername, normalizeUsername } from "./username";
+import { isValidUsername } from "./username";
 import WorkoutLogger from "./workout-logger";
 
 type AuthState = "checking" | "authenticated" | "anonymous" | "registering" | "resetting";
@@ -78,11 +78,10 @@ export default function AuthGate() {
       setMessage(t.auth.invalidUsername);
       return;
     }
-    const normalizedUsername = normalizeUsername(username);
     const response = await apiFetch("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: normalizedUsername, password }),
+      body: JSON.stringify({ username, password }),
     }).catch(() => null);
     if (!response?.ok) {
       setMessage(t.auth.invalidLogin);
@@ -104,11 +103,10 @@ export default function AuthGate() {
       setMessage(t.auth.passwordsMismatch);
       return;
     }
-    const normalizedUsername = normalizeUsername(username);
     const response = await apiFetch("/api/v1/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ invitation_token: invitationToken, username: normalizedUsername, password }),
+      body: JSON.stringify({ invitation_token: invitationToken, username, password }),
     }).catch(() => null);
     if (!response?.ok) {
       setMessage(response?.status === 409
