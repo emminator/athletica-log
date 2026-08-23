@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import AccountPanel from "./account-panel";
 import { apiFetch } from "./api";
+import { LanguageSwitcher, useLanguage } from "./language";
 import WorkoutLogger from "./workout-logger";
 
 type AuthState = "checking" | "authenticated" | "anonymous" | "registering" | "resetting";
@@ -32,6 +33,7 @@ function clearUrlFragment() {
 }
 
 export default function AuthGate() {
+  const { t } = useLanguage();
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -63,10 +65,10 @@ export default function AuthGate() {
         }
       })
       .catch(() => {
-        setMessage("Die Anwendung ist momentan nicht erreichbar.");
+        setMessage(t.auth.unavailable);
         setAuthState("anonymous");
       });
-  }, [authState, hydrated, resetToken]);
+  }, [authState, hydrated, resetToken, t.auth.unavailable]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,7 +79,7 @@ export default function AuthGate() {
       body: JSON.stringify({ username, password }),
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage("Benutzername oder Passwort ist nicht korrekt.");
+      setMessage(t.auth.invalidLogin);
       return;
     }
     setPassword("");
@@ -89,7 +91,7 @@ export default function AuthGate() {
     event.preventDefault();
     setMessage("");
     if (password !== passwordConfirmation) {
-      setMessage("Die Passwörter stimmen nicht überein.");
+      setMessage(t.auth.passwordsMismatch);
       return;
     }
     const response = await apiFetch("/api/v1/auth/register", {
@@ -99,8 +101,8 @@ export default function AuthGate() {
     }).catch(() => null);
     if (!response?.ok) {
       setMessage(response?.status === 409
-        ? "Dieser Benutzername ist bereits vergeben."
-        : "Die Einladung ist ungültig oder abgelaufen.");
+        ? t.auth.usernameTaken
+        : t.auth.invalidInvitation);
       return;
     }
     setPassword("");
@@ -114,7 +116,7 @@ export default function AuthGate() {
     event.preventDefault();
     setMessage("");
     if (password !== passwordConfirmation) {
-      setMessage("Die Passwörter stimmen nicht überein.");
+      setMessage(t.auth.passwordsMismatch);
       return;
     }
     const response = await apiFetch("/api/v1/auth/password-reset", {
@@ -125,15 +127,15 @@ export default function AuthGate() {
     if (!response?.ok) {
       const error = response ? await response.json().catch(() => null) as { detail?: string } | null : null;
       setMessage(error?.detail === "New password must be different"
-        ? "Das neue Passwort muss sich vom bisherigen Passwort unterscheiden."
-        : "Der Link ist ungültig, abgelaufen oder wurde bereits verwendet.");
+        ? t.auth.samePassword
+        : t.auth.invalidReset);
       return;
     }
     await apiFetch("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
     setPassword("");
     setPasswordConfirmation("");
     clearUrlFragment();
-    setMessage("Passwort geändert. Du kannst dich jetzt anmelden.");
+    setMessage(t.auth.resetSuccess);
     setAuthState("anonymous");
   }
 
@@ -163,7 +165,7 @@ export default function AuthGate() {
   async function copyAccessLink() {
     if (!accessLink) return;
     await navigator.clipboard.writeText(accessLink.url);
-    setMessage(`${accessLink.label} wurde kopiert.`);
+    setMessage(t.auth.copied(accessLink.label));
   }
 
   const visibleAuthState: AuthState = !hydrated
@@ -175,7 +177,7 @@ export default function AuthGate() {
         : authState;
 
   if (visibleAuthState === "checking") {
-    return <main className="authShell"><p className="hint" role="status">Zugriff wird geprüft …</p></main>;
+    return <main className="authShell"><p className="hint" role="status">{t.auth.checking}</p></main>;
   }
 
   if (visibleAuthState === "anonymous" || visibleAuthState === "registering" || visibleAuthState === "resetting") {
@@ -184,26 +186,27 @@ export default function AuthGate() {
     return (
       <main className="authShell">
         <section className="loginPanel" aria-labelledby="login-heading">
+          <LanguageSwitcher />
           <p className="eyebrow">ATHLETICA LOG</p>
-          <h1 id="login-heading">{registering ? "Konto einrichten" : resetting ? "Passwort zurücksetzen" : "Anmelden"}</h1>
+          <h1 id="login-heading">{registering ? t.auth.setupAccount : resetting ? t.auth.resetPassword : t.auth.signIn}</h1>
           <p className="intro">{registering
-            ? "Wähle deine persönlichen Zugangsdaten. Die Einladung kann nur einmal verwendet werden."
+            ? t.auth.registerIntro
             : resetting
-              ? "Wähle ein neues Passwort. Der Link kann nur einmal verwendet werden."
-            : "Melde dich an, um deine Trainingsdaten zu öffnen."}</p>
+              ? t.auth.resetIntro
+            : t.auth.signInIntro}</p>
           <form onSubmit={registering ? register : resetting ? resetPassword : login}>
-            {!resetting && <label>Benutzername<input required minLength={3} maxLength={32} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>}
-            <label>{resetting ? "Neues Passwort" : "Passwort"}<input required minLength={registering || resetting ? 12 : 1} type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            {(registering || resetting) && <label>{resetting ? "Neues Passwort wiederholen" : "Passwort wiederholen"}<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>}
+            {!resetting && <label>{t.auth.username}<input required minLength={3} maxLength={32} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>}
+            <label>{resetting ? t.auth.newPassword : t.auth.password}<input required minLength={registering || resetting ? 12 : 1} type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            {(registering || resetting) && <label>{resetting ? t.auth.repeatNewPassword : t.auth.repeatPassword}<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>}
             {message && <p className="message" role="alert">{message}</p>}
-            <button type="submit">{registering ? "Konto erstellen" : resetting ? "Passwort speichern" : "Anmelden"}</button>
+            <button type="submit">{registering ? t.auth.createAccount : resetting ? t.auth.savePassword : t.auth.signIn}</button>
           </form>
           {(registering || resetting) && <button className="authAlternative" type="button" onClick={async () => {
             if (resetting) await apiFetch("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
             clearUrlFragment();
             setMessage("");
             setAuthState("anonymous");
-          }}>Zur Anmeldung</button>}
+          }}>{t.auth.backToSignIn}</button>}
         </section>
       </main>
     );
@@ -215,8 +218,9 @@ export default function AuthGate() {
         <strong>Athletica Log</strong>
         <div className="navActions">
           <span className="currentUser">{user?.username}</span>
-          <button className="navButton" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen((open) => !open)}>Konto</button>
-          <button className="navButton" type="button" onClick={logout}>Abmelden</button>
+          <LanguageSwitcher />
+          <button className="navButton" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen((open) => !open)}>{t.auth.account}</button>
+          <button className="navButton" type="button" onClick={logout}>{t.auth.signOut}</button>
         </div>
       </nav>
       {accountOpen && user && <AccountPanel
@@ -226,15 +230,15 @@ export default function AuthGate() {
         onPasswordChanged={passwordChanged}
       />}
       {accessLink && <section className="inviteBanner" aria-labelledby="access-link-heading">
-        <div><p className="step">SICHERER LINK</p><h2 id="access-link-heading">{accessLink.heading}</h2></div>
+        <div><p className="step">{t.auth.secureLink}</p><h2 id="access-link-heading">{accessLink.heading}</h2></div>
         <label>{accessLink.label}<input aria-label={accessLink.label} readOnly value={accessLink.url} /></label>
-        <div className="actionGroup"><button type="button" onClick={copyAccessLink}>Link kopieren</button><button className="secondary" type="button" onClick={() => setAccessLink(null)}>Schließen</button></div>
+        <div className="actionGroup"><button type="button" onClick={copyAccessLink}>{t.auth.copyLink}</button><button className="secondary" type="button" onClick={() => setAccessLink(null)}>{t.common.close}</button></div>
       </section>}
       {message && authState === "authenticated" && <p className="message navMessage" role="status">{message}</p>}
       <header>
         <p className="eyebrow">TRAIN. TRACK. PROGRESS.</p>
-        <h1>Dein Training.<br />Messbar besser.</h1>
-        <p className="intro">Erfasse deine Übungen und speichere deine vollständigen Trainingseinheiten.</p>
+        <h1>{t.auth.hero}<br />{t.auth.heroAccent}</h1>
+        <p className="intro">{t.auth.heroIntro}</p>
       </header>
       <WorkoutLogger />
     </main>

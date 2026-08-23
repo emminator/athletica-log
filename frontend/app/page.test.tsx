@@ -11,6 +11,7 @@ describe("Home", () => {
     window.history.replaceState({}, "", "/");
   });
   beforeEach(() => {
+    window.localStorage.clear();
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({
       ok: true,
       json: async () => url.endsWith("/auth/session")
@@ -25,6 +26,23 @@ describe("Home", () => {
     expect(screen.getByText("Satz 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Training speichern" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trainingshistorie" })).toBeInTheDocument();
+  });
+
+  it("switches the complete interface to English and remembers the preference", async () => {
+    const { unmount } = render(<Home />);
+    await screen.findByRole("heading", { name: "Einheit erfassen" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Englisch" }));
+
+    expect(await screen.findByRole("heading", { name: "Log session" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save workout" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Training history" })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("lang", "en");
+    expect(window.localStorage.getItem("athletica-language")).toBe("en");
+
+    unmount();
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Log session" })).toBeInTheDocument();
   });
 
   it("starts mobile pages at the device width without zoom", () => {
