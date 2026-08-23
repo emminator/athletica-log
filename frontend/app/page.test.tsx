@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { viewport } from "./layout";
 import Home from "./page";
@@ -260,7 +261,7 @@ describe("Home", () => {
       status: options?.method === "POST" ? 201 : 200,
       json: async () => url.endsWith("/auth/session")
         ? { authenticated: true, username: "owner", is_admin: true }
-        : url.endsWith("/auth/invitations")
+        : url.endsWith("/auth/invitations") && options?.method === "POST"
           ? { token: "new-invitation-token", expires_at: "2026-08-27T12:00:00Z" }
           : [],
     })));
@@ -272,6 +273,133 @@ describe("Home", () => {
     expect(await screen.findByRole("heading", { name: "Einladung ist 7 Tage gültig" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Einladungslink" })).toHaveValue(
       "http://localhost:3000/#invite=new-invitation-token",
+    );
+  });
+
+  it("lists and revokes open tester invitations", async () => {
+    const invitation = {
+      id: "invitation-id",
+      created_at: "2026-08-21T12:00:00Z",
+      expires_at: "2026-08-28T12:00:00Z",
+    };
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "owner", is_admin: true }) });
+      }
+      if (url.endsWith("/auth/invitations") && !options?.method) {
+        return Promise.resolve({ ok: true, json: async () => [invitation] });
+      }
+      if (url.endsWith("/auth/invitations/invitation-id") && options?.method === "DELETE") {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Konto" }));
+    expect(await screen.findByText("Tester-Einladung")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Widerrufen" }));
+
+    expect(await screen.findByText("Keine offenen Einladungen.")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Die Einladung wurde widerrufen.");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/invitations/invitation-id",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("creates a one-time password reset link for a tester", async () => {
+    const owner = { id: "owner-id", username: "owner", is_admin: true, is_active: true, created_at: "2026-08-20T12:00:00Z" };
+    const tester = { id: "tester-id", username: "tester", is_admin: false, is_active: true, created_at: "2026-08-21T12:00:00Z" };
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/session")) {
+        return Promise.resolve({ ok: true, json: async () => ({ authenticated: true, username: "owner", is_admin: true }) });
+      }
+      if (url.endsWith("/auth/users")) {
+        return Promise.resolve({ ok: true, json: async () => [owner, tester] });
+      }
+      if (url.endsWith("/auth/users/tester-id/password-resets") && options?.method === "POST") {
+        return Promise.resolve({ ok: true, status: 201, json: async () => ({ token: "reset-token", expires_at: "2026-08-21T13:00:00Z" }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    fireEvent.click(await screen.findByRole("button", { name: "Konto" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Passwort zurücksetzen" }));
+
+    expect(await screen.findByRole("heading", { name: "Passwort-Reset für tester · 1 Stunde gültig" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Reset-Link" })).toHaveValue(
+      "http://localhost:3000/#reset=reset-token",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/users/tester-id/password-resets",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ expires_in_hours: 1 }) }),
+    );
+  });
+
+  it("sets a new password from a one-time reset link", async () => {
+    window.history.replaceState({}, "", "/#reset=password-reset-token-with-enough-characters-123");
+    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/password-reset") && options?.method === "POST") {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.resolve({ ok: false, status: 401 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Passwort zurücksetzen" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Neues Passwort", { exact: true }), { target: { value: "new-password-456" } });
+    fireEvent.change(screen.getByLabelText("Neues Passwort wiederholen"), { target: { value: "new-password-456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Passwort speichern" }));
+
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Passwort geändert. Du kannst dich jetzt anmelden.");
+    expect(window.location.hash).toBe("");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/password-reset",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          reset_token: "password-reset-token-with-enough-characters-123",
+          new_password: "new-password-456",
+        }),
+      }),
+    );
+  });
+
+  it("keeps server and client markup stable for password reset links", () => {
+    window.history.replaceState({}, "", "/#reset=password-reset-token-with-enough-characters-789");
+
+    const serverMarkup = renderToString(<Home />);
+
+    expect(serverMarkup).toContain("Zugriff wird geprüft");
+    expect(serverMarkup).not.toContain("Passwort zurücksetzen");
+  });
+
+  it("explains when a reset password matches the previous password", async () => {
+    window.history.replaceState({}, "", "/#reset=password-reset-token-with-enough-characters-456");
+    vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith("/auth/password-reset") && options?.method === "POST") {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: "New password must be different" }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 401 });
+    }));
+
+    render(<Home />);
+    fireEvent.change(await screen.findByLabelText("Neues Passwort", { exact: true }), { target: { value: "existing-password-123" } });
+    fireEvent.change(screen.getByLabelText("Neues Passwort wiederholen"), { target: { value: "existing-password-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Passwort speichern" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Das neue Passwort muss sich vom bisherigen Passwort unterscheiden.",
     );
   });
 

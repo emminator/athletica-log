@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import get_db
-from app.models import Invitation, User, UserSession
+from app.models import Invitation, PasswordReset, User, UserSession
 
 SESSION_COOKIE = "athletica_session"
 SCRYPT_N = 2**14
@@ -51,8 +51,29 @@ class InvitationCreate(BaseModel):
 
 
 class InvitationRead(BaseModel):
+    id: UUID
     token: str
     expires_at: datetime
+
+
+class InvitationSummary(BaseModel):
+    id: UUID
+    created_at: datetime
+    expires_at: datetime
+
+
+class PasswordResetCreate(BaseModel):
+    expires_in_hours: int = Field(default=1, ge=1, le=24)
+
+
+class PasswordResetRead(BaseModel):
+    token: str
+    expires_at: datetime
+
+
+class PasswordResetRequest(BaseModel):
+    reset_token: str = Field(min_length=32, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
 
 
 class PasswordChangeRequest(BaseModel):
@@ -118,6 +139,10 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def get_or_create_bootstrap_user(db: Session, settings: Settings) -> User:
@@ -242,6 +267,7 @@ def register(
         select(Invitation).where(
             Invitation.token_hash == token_hash(payload.invitation_token),
             Invitation.used_at.is_(None),
+            Invitation.revoked_at.is_(None),
             Invitation.expires_at > now,
         ).with_for_update()
     )
@@ -281,7 +307,58 @@ def create_invitation(
     )
     db.add(invitation)
     db.commit()
-    return InvitationRead(token=raw_token, expires_at=invitation.expires_at)
+    return InvitationRead(id=invitation.id, token=raw_token, expires_at=invitation.expires_at)
+
+
+@router.get("/invitations", response_model=list[InvitationSummary])
+def list_open_invitations(
+    user: AuthenticatedUser, db: DatabaseSession
+) -> list[InvitationSummary]:
+    require_admin(user)
+    now = datetime.now(UTC)
+    invitations = db.scalars(
+        select(Invitation)
+        .where(
+            Invitation.used_at.is_(None),
+            Invitation.revoked_at.is_(None),
+            Invitation.expires_at > now,
+        )
+        .order_by(Invitation.created_at.desc())
+    )
+    return [
+        InvitationSummary(
+            id=invitation.id,
+            created_at=as_utc(invitation.created_at),
+            expires_at=as_utc(invitation.expires_at),
+        )
+        for invitation in invitations
+    ]
+
+
+@router.delete("/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invitation(
+    invitation_id: UUID,
+    user: AuthenticatedUser,
+    db: DatabaseSession,
+) -> None:
+    require_admin(user)
+    now = datetime.now(UTC)
+    invitation = db.scalar(
+        select(Invitation)
+        .where(
+            Invitation.id == invitation_id,
+            Invitation.used_at.is_(None),
+            Invitation.revoked_at.is_(None),
+            Invitation.expires_at > now,
+        )
+        .with_for_update()
+    )
+    if invitation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Open invitation not found"
+        )
+    invitation.revoked_at = now
+    db.commit()
 
 
 @router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
@@ -332,6 +409,84 @@ def update_user_status(
     db.commit()
     db.refresh(managed_user)
     return managed_user
+
+
+@router.post(
+    "/users/{user_id}/password-resets",
+    response_model=PasswordResetRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_password_reset(
+    user_id: UUID,
+    payload: PasswordResetCreate,
+    user: AuthenticatedUser,
+    db: DatabaseSession,
+) -> PasswordResetRead:
+    require_admin(user)
+    managed_user = db.get(User, user_id)
+    if managed_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if managed_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Admin passwords cannot be reset here"
+        )
+    if not managed_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive users cannot reset passwords"
+        )
+    now = datetime.now(UTC)
+    open_resets = db.scalars(
+        select(PasswordReset).where(
+            PasswordReset.user_id == managed_user.id,
+            PasswordReset.used_at.is_(None),
+            PasswordReset.revoked_at.is_(None),
+        )
+    )
+    for open_reset in open_resets:
+        open_reset.revoked_at = now
+    raw_token = secrets.token_urlsafe(32)
+    reset = PasswordReset(
+        token_hash=token_hash(raw_token),
+        user_id=managed_user.id,
+        created_by_id=user.id,
+        created_at=now,
+        expires_at=now + timedelta(hours=payload.expires_in_hours),
+    )
+    db.add(reset)
+    db.commit()
+    return PasswordResetRead(token=raw_token, expires_at=reset.expires_at)
+
+
+@router.post("/password-reset", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(payload: PasswordResetRequest, db: DatabaseSession) -> None:
+    now = datetime.now(UTC)
+    reset = db.scalar(
+        select(PasswordReset)
+        .where(
+            PasswordReset.token_hash == token_hash(payload.reset_token),
+            PasswordReset.used_at.is_(None),
+            PasswordReset.revoked_at.is_(None),
+            PasswordReset.expires_at > now,
+        )
+        .with_for_update()
+    )
+    if reset is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password reset"
+        )
+    managed_user = db.get(User, reset.user_id)
+    if managed_user is None or not managed_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password reset"
+        )
+    if verify_password(payload.new_password, managed_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="New password must be different"
+        )
+    managed_user.password_hash = hash_password(payload.new_password)
+    reset.used_at = now
+    db.execute(delete(UserSession).where(UserSession.user_id == managed_user.id))
+    db.commit()
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

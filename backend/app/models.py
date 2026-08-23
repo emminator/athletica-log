@@ -57,10 +57,27 @@ class Invitation(Base):
     invited_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     invited_by: Mapped[User] = relationship()
+
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    created_by: Mapped[User] = relationship(foreign_keys=[created_by_id])
 
 
 class Exercise(Base):
