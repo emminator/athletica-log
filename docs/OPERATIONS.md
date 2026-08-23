@@ -105,7 +105,7 @@ Anwendungsrollback verwendet.
 | `/health/live` grün, `/health/ready` rot | Datenbankstatus und Logs | Verbindung prüfen, keine Deploy-Schleife starten |
 | Fehler direkt nach Release | angezeigte `release` mit GitHub vergleichen | Anwendung zurückrollen |
 | Trainingsdaten fehlen oder wurden verändert | betroffene Konten und Zeitpunkt feststellen | Schreibzugriff stoppen, Recovery vorbereiten |
-| Einzelner Request schlägt fehl | `X-Request-ID` der Antwort notieren | Render-Logs nach derselben ID durchsuchen |
+| Einzelner Request schlägt fehl | anwendungseigene `X-Request-ID` der Antwort notieren | JSON-Logs nach `request_id` durchsuchen; `cf_ray` bleibt separates Infrastrukturfeld |
 
 Bei jedem Vorfall werden Beginn, Auswirkung, ausgeführte Schritte und Abschluss kurz dokumentiert.
 

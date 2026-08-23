@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     auth_password_hash: str = ""
     session_max_age_seconds: int = 60 * 60 * 24 * 30
     session_cookie_secure: bool = False
+    hsts_enabled: bool = False
     static_files_dir: str = ""
     docs_enabled: bool = True
     app_release: str = ""

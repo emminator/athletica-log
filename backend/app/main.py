@@ -1,10 +1,8 @@
-import logging
 from pathlib import Path
-from time import perf_counter
-from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -12,9 +10,16 @@ from app.api import router as api_router
 from app.auth import router as auth_router
 from app.config import get_settings
 from app.db import engine
+from app.observability import (
+    REQUEST_ID_HEADER,
+    add_response_headers,
+    log_request,
+    reset_request_context,
+    should_log_request,
+    start_request_context,
+)
 
 settings = get_settings()
-request_logger = logging.getLogger("athletica.requests")
 app = FastAPI(
     title="Athletica Log API",
     version="0.1.0",
@@ -28,45 +33,30 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
 app.include_router(auth_router)
 app.include_router(api_router)
 
 
 @app.middleware("http")
-async def add_operational_headers(request: Request, call_next) -> Response:
-    request_id = request.headers.get("cf-ray") or uuid4().hex
-    started_at = perf_counter()
+async def observe_request(request: Request, call_next) -> Response:
+    context_token = start_request_context(request)
     try:
         response = await call_next(request)
-    except Exception:
-        request_logger.exception(
-            "request failed request_id=%s method=%s path=%s",
-            request_id,
-            request.method,
-            request.url.path,
-        )
-        raise
+        add_response_headers(request, response, settings)
+        if should_log_request(request, response.status_code):
+            log_request(request, response.status_code)
+        return response
+    finally:
+        reset_request_context(context_token)
 
-    response.headers["X-Request-ID"] = request_id
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if settings.session_cookie_secure:
-        response.headers["Strict-Transport-Security"] = "max-age=31536000"
-    if request.url.path.startswith(("/api/v1/auth/", "/health/")):
-        response.headers["Cache-Control"] = "no-store"
 
-    if not request.url.path.startswith("/health/") or response.status_code >= 400:
-        request_logger.info(
-            "request request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
-            request_id,
-            request.method,
-            request.url.path,
-            response.status_code,
-            (perf_counter() - started_at) * 1000,
-        )
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, exception: Exception) -> JSONResponse:
+    response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    add_response_headers(request, response, settings)
+    log_request(request, response.status_code, exception=exception)
     return response
 
 

@@ -25,6 +25,8 @@ services:
         sync: false
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: HSTS_ENABLED
+        value: "true"
       - key: DOCS_ENABLED
         value: "false"
       - key: BACKEND_CORS_ORIGINS

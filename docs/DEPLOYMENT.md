@@ -10,6 +10,7 @@ von FastAPI unter derselben Domain wie die API ausgeliefert.
 - Passwörter liegen nur als gesalzene scrypt-Hashes in PostgreSQL, niemals im Repository.
 - Sitzungen verwenden zufällige, nur gehasht gespeicherte Tokens. Der Browser erhält ausschließlich
   ein HttpOnly-, Secure- und SameSite-Strict-Cookie.
+- HSTS wird produktiv unabhängig von der Cookie-Konfiguration über `HSTS_ENABLED` aktiviert.
 - Übungen und Trainings tragen eine Benutzer-ID; jede API-Abfrage erzwingt den angemeldeten Besitzer.
 - Neue Konten entstehen nur über zeitlich begrenzte, einmal verwendbare Einladungen eines Admins.
 - Einladungs- und Passwort-Reset-Tokens liegen ausschließlich als SHA-256-Hash in der Datenbank.

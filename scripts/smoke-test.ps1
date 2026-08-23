@@ -6,22 +6,33 @@ param(
 $ErrorActionPreference = "Stop"
 $normalizedBaseUrl = $BaseUrl.TrimEnd("/")
 
-function Invoke-WithRetry {
+function Invoke-HttpGet {
     param(
-        [scriptblock]$Operation,
-        [int]$Attempts = 5
+        [string]$Uri,
+        [int]$Attempts = 3
     )
 
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
         try {
-            return & $Operation
+            $response = Invoke-WebRequest -Uri $Uri -TimeoutSec 10 -SkipHttpErrorCheck
         }
         catch {
             if ($attempt -eq $Attempts) {
                 throw
             }
             Start-Sleep -Seconds 2
+            continue
         }
+
+        $statusCode = [int]$response.StatusCode
+        if ($statusCode -eq 200) {
+            return $response
+        }
+        if ($statusCode -ge 500 -and $attempt -lt $Attempts) {
+            Start-Sleep -Seconds 2
+            continue
+        }
+        throw "Unexpected HTTP status for ${Uri}: $statusCode"
     }
 }
 
@@ -31,24 +42,21 @@ function Test-Endpoint {
         [string]$ExpectedStatus
     )
 
-    $response = Invoke-WithRetry {
-        Invoke-RestMethod -Uri "$normalizedBaseUrl$Path" -TimeoutSec 10
+    $response = Invoke-HttpGet -Uri "$normalizedBaseUrl$Path"
+    $payload = $response.Content | ConvertFrom-Json -ErrorAction Stop
+    if ($payload.status -ne $ExpectedStatus) {
+        throw "Unexpected application status for ${Path}: $($payload.status)"
     }
-    if ($response.status -ne $ExpectedStatus) {
-        throw "Unexpected status for ${Path}: $($response.status)"
+    if ($ExpectedRelease -and $payload.release -ne $ExpectedRelease) {
+        throw "Unexpected release for ${Path}: $($payload.release)"
     }
-    if ($ExpectedRelease -and $response.release -ne $ExpectedRelease) {
-        throw "Unexpected release for ${Path}: $($response.release)"
-    }
-    Write-Host "OK  $Path  status=$($response.status)  release=$($response.release)"
+    Write-Host "OK  $Path  http=$($response.StatusCode)  status=$($payload.status)  release=$($payload.release)"
 }
 
 Test-Endpoint -Path "/health/live" -ExpectedStatus "ok"
 Test-Endpoint -Path "/health/ready" -ExpectedStatus "ready"
 
-$page = Invoke-WithRetry {
-    Invoke-WebRequest -Uri $normalizedBaseUrl -TimeoutSec 10
-}
+$page = Invoke-HttpGet -Uri $normalizedBaseUrl
 if ($page.Content -notmatch "Athletica Log") {
     throw "The application page did not contain the expected title."
 }
