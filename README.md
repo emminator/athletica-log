@@ -55,3 +55,7 @@ Die vorgesehene Render-Konfiguration liegt in `render.yaml`. Sie erstellt einen 
 und eine private PostgreSQL-Datenbank in Frankfurt und veröffentlicht die Anwendung unter
 `athletica.emminger-net.de`. Einrichtung, Login-Sicherheit und CI/CD-Ablauf sind in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) beschrieben.
+
+Für Releases und laufenden Betrieb gelten zusätzlich das
+[`Betriebs- und Notfallhandbuch`](docs/OPERATIONS.md) und die
+[`Release-Checkliste`](docs/RELEASE_CHECKLIST.md).

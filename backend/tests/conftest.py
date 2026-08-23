@@ -14,6 +14,7 @@ def stable_test_settings(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "auth_enabled", False)
     monkeypatch.setattr(settings, "session_cookie_secure", False)
+    monkeypatch.setattr(settings, "hsts_enabled", False)
 
 
 @pytest.fixture
