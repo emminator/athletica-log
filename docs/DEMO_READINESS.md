@@ -9,6 +9,9 @@ experience for recruiters or external testers.
 - Production deployment with a custom domain and managed TLS.
 - Responsive German and English interfaces.
 - Invite-only multi-user accounts with server-side data isolation.
+- Dedicated non-admin `reviewer` account with synthetic exercises and workouts;
+  credentials remain outside the repository.
+- Sanitized desktop and responsive mobile screenshots in the README.
 - Docker-based local development and repeatable frontend installs through the
   committed pnpm lockfile.
 - Automated linting, type checking, backend and frontend tests, production-image
@@ -22,14 +25,12 @@ experience for recruiters or external testers.
 
 ### Required for a recruiter demo
 
-1. Create a dedicated non-admin reviewer account with synthetic training data.
-   Never share the personal or administrator account.
-2. Capture one desktop and one real-device mobile screenshot from that sanitized
-   account and add them to the README.
-3. Review every English screen once end to end, including invitation, login,
+1. Review every English screen once end to end, including invitation, login,
    password reset, empty states, validation, and error messages.
-4. Add a short reviewer note with the live URL, credentials delivery method, and
-   the three workflows worth trying. Credentials must stay outside Git.
+2. Capture an optional final screenshot on a real iPhone from the sanitized
+   account; the repository currently contains a responsive browser capture.
+3. Deliver the live URL and reviewer credentials through a private channel.
+   Credentials must stay outside Git and the application materials.
 
 ### Required before making the repository public
 
