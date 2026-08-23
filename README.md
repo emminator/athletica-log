@@ -23,6 +23,16 @@ training data. A dedicated reviewer account can be provided on request.
 - Manage invite-only tester accounts, password changes, one-time password resets,
   account deactivation, and invitation revocation.
 
+## Product preview
+
+### Workout history and progression
+
+![Athletica Log workout history with a duplicated progression session](docs/assets/athletica-desktop-demo.png)
+
+### Mobile workout entry
+
+<img src="docs/assets/athletica-mobile-demo.png" alt="Athletica Log mobile workout entry" width="390">
+
 ## Architecture
 
 ```mermaid
@@ -116,6 +126,7 @@ render.yaml          Production infrastructure blueprint
 - [Operations and recovery guide](docs/OPERATIONS.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Portfolio demo readiness](docs/DEMO_READINESS.md)
+- [Five-minute reviewer walkthrough](docs/REVIEWER_GUIDE.md)
 
 ## Current scope and next steps
 
