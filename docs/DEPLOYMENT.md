@@ -12,6 +12,8 @@ von FastAPI unter derselben Domain wie die API ausgeliefert.
   ein HttpOnly-, Secure- und SameSite-Strict-Cookie.
 - Übungen und Trainings tragen eine Benutzer-ID; jede API-Abfrage erzwingt den angemeldeten Besitzer.
 - Neue Konten entstehen nur über zeitlich begrenzte, einmal verwendbare Einladungen eines Admins.
+- Einladungs- und Passwort-Reset-Tokens liegen ausschließlich als SHA-256-Hash in der Datenbank.
+  Neue Reset-Links widerrufen automatisch noch offene ältere Links desselben Testers.
 - Healthchecks bleiben ohne Anmeldung erreichbar; die API-Dokumentation ist produktiv deaktiviert.
 - Die Datenbank ist nur über das private Render-Netzwerk erreichbar.
 
@@ -40,7 +42,10 @@ Nach der Anmeldung sieht ein Administrator die Aktion **Tester einladen**. Sie e
 Tage gültigen, einmal verwendbaren Link. Der Tester wählt darüber selbst Benutzername und Passwort.
 Der Link ist wie ein temporäres Zugangsdokument zu behandeln und nur an die vorgesehene Person zu
 übermitteln. Das Einladungstoken liegt im Fragmentteil der URL und wird dadurch nicht an den
-Webserver oder dessen Zugriffsprotokoll übertragen.
+Webserver oder dessen Zugriffsprotokoll übertragen. Unter **Konto** werden alle noch gültigen,
+unbenutzten Einladungen angezeigt und können widerrufen werden. Der Klartext-Link kann nach dem
+Schließen nicht erneut aus der Datenbank ausgelesen werden; bei Bedarf wird eine neue Einladung
+erstellt.
 
 ## Konten verwalten
 
@@ -53,6 +58,14 @@ Administratoren sehen unter **Konto** außerdem alle Konten. Tester können dort
 wieder aktiviert werden. Eine Deaktivierung beendet sofort sämtliche Sitzungen, löscht aber weder
 Übungen noch Trainingsdaten. Administratorkonten können über diese Oberfläche nicht deaktiviert
 werden, damit der administrative Zugang nicht versehentlich verloren geht.
+
+Für ein aktives Testkonto kann ein Administrator einen eine Stunde gültigen Einmal-Link zum
+Zurücksetzen des Passworts erzeugen. Der Reset-Link wird wie eine Einladung über das URL-Fragment
+übertragen und nur unmittelbar nach dem Erstellen angezeigt. Ein neuer Link widerruft ältere offene
+Reset-Links für dieses Konto. Nach dem erfolgreichen Zurücksetzen werden alle Sitzungen des Testers
+beendet. Deaktivierte Tester und Administratorkonten können über diese Oberfläche keinen Reset-Link
+erhalten; für das Administratorkonto bleibt der interaktive `set-password`-Befehl der kontrollierte
+Wiederherstellungsweg.
 
 ## Ersteinrichtung
 

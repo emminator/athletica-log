@@ -75,10 +75,13 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .accountSectionHeader p { margin: 6px 0 0; color: #959c97; font-size: .78rem; line-height: 1.45; }
 .accountList { display: grid; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
 .accountList li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border-top: 1px solid #303731; }
-.accountList li > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.accountIdentity { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .accountList strong { overflow-wrap: anywhere; }
 .accountList span { color: #959c97; font-size: .75rem; }
 .accountList button { align-self: center; padding: 9px 12px; }
+.accountListActions { display: flex; gap: 8px; }
+.accountSubsection { margin-top: 24px; padding-top: 20px; border-top: 1px solid #303731; }
+.accountSubsection > .hint { margin-bottom: 0; }
 .accountMessage { margin-top: 18px; }
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
@@ -107,6 +110,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   .accountPassword, .accountAdmin { padding: 16px; }
   .accountList li { align-items: stretch; flex-direction: column; }
   .accountList button { width: 100%; align-self: stretch; }
+  .accountListActions { flex-direction: column; }
   .historySummary { flex-direction: column; }
   .historyActions { align-self: flex-start; flex-wrap: wrap; }
   .detailHeader, .detailRow { grid-template-columns: minmax(120px, 1fr) 55px 55px 45px; gap: 6px; }

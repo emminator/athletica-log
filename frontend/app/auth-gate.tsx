@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import AccountPanel from "./account-panel";
 import { apiFetch } from "./api";
 import WorkoutLogger from "./workout-logger";
 
-type AuthState = "checking" | "authenticated" | "anonymous" | "registering";
+type AuthState = "checking" | "authenticated" | "anonymous" | "registering" | "resetting";
 
 type SessionUser = {
   authenticated: true;
@@ -13,42 +13,60 @@ type SessionUser = {
   is_admin: boolean;
 };
 
+function subscribeToHashChange(onStoreChange: () => void) {
+  window.addEventListener("hashchange", onStoreChange);
+  return () => window.removeEventListener("hashchange", onStoreChange);
+}
+
+function currentHash() {
+  return window.location.hash;
+}
+
+function serverHash() {
+  return "";
+}
+
+function clearUrlFragment() {
+  window.history.replaceState({}, "", window.location.pathname);
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
 export default function AuthGate() {
   const [authState, setAuthState] = useState<AuthState>("checking");
+  const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [invitationToken, setInvitationToken] = useState(() => typeof window === "undefined"
-    ? ""
-    : new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? "");
-  const [invitationUrl, setInvitationUrl] = useState("");
+  const hash = useSyncExternalStore(subscribeToHashChange, currentHash, serverHash);
+  const hashParameters = new URLSearchParams(hash.slice(1));
+  const invitationToken = hashParameters.get("invite") ?? "";
+  const resetToken = hashParameters.get("reset") ?? "";
+  const [accessLink, setAccessLink] = useState<{ heading: string; label: string; url: string } | null>(null);
   const [message, setMessage] = useState("");
   const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
+    const hydrationTimer = window.setTimeout(() => setHydrated(true), 0);
+    return () => window.clearTimeout(hydrationTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || resetToken || authState !== "checking") return;
     apiFetch("/api/v1/auth/session")
       .then(async (response) => {
         if (response.ok) {
           setUser((await response.json()) as SessionUser);
           setAuthState("authenticated");
         } else {
-          setAuthState(invitationToken ? "registering" : "anonymous");
+          setAuthState("anonymous");
         }
       })
       .catch(() => {
         setMessage("Die Anwendung ist momentan nicht erreichbar.");
-        setAuthState(invitationToken ? "registering" : "anonymous");
+        setAuthState("anonymous");
       });
-  }, [invitationToken]);
-
-  useEffect(() => {
-    function readInvitationFromUrl() {
-      setInvitationToken(new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? "");
-    }
-    window.addEventListener("hashchange", readInvitationFromUrl);
-    return () => window.removeEventListener("hashchange", readInvitationFromUrl);
-  }, []);
+  }, [authState, hydrated, resetToken]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,9 +105,36 @@ export default function AuthGate() {
     }
     setPassword("");
     setPasswordConfirmation("");
-    window.history.replaceState({}, "", window.location.pathname);
+    clearUrlFragment();
     setUser((await response.json()) as SessionUser);
     setAuthState("authenticated");
+  }
+
+  async function resetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if (password !== passwordConfirmation) {
+      setMessage("Die Passwörter stimmen nicht überein.");
+      return;
+    }
+    const response = await apiFetch("/api/v1/auth/password-reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset_token: resetToken, new_password: password }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      const error = response ? await response.json().catch(() => null) as { detail?: string } | null : null;
+      setMessage(error?.detail === "New password must be different"
+        ? "Das neue Passwort muss sich vom bisherigen Passwort unterscheiden."
+        : "Der Link ist ungültig, abgelaufen oder wurde bereits verwendet.");
+      return;
+    }
+    await apiFetch("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+    setPassword("");
+    setPasswordConfirmation("");
+    clearUrlFragment();
+    setMessage("Passwort geändert. Du kannst dich jetzt anmelden.");
+    setAuthState("anonymous");
   }
 
   async function logout() {
@@ -98,7 +143,7 @@ export default function AuthGate() {
     setUsername("");
     setPassword("");
     setPasswordConfirmation("");
-    setInvitationUrl("");
+    setAccessLink(null);
     setAccountOpen(false);
     setMessage("");
     setAuthState("anonymous");
@@ -109,54 +154,56 @@ export default function AuthGate() {
     setUsername("");
     setPassword("");
     setPasswordConfirmation("");
-    setInvitationUrl("");
+    setAccessLink(null);
     setAccountOpen(false);
     setMessage(passwordMessage);
     setAuthState("anonymous");
   }
 
-  async function createInvitation() {
-    setMessage("");
-    const response = await apiFetch("/api/v1/auth/invitations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expires_in_days: 7 }),
-    }).catch(() => null);
-    if (!response?.ok) {
-      setMessage("Einladung konnte nicht erstellt werden.");
-      return;
-    }
-    const invitation = (await response.json()) as { token: string; expires_at: string };
-    setInvitationUrl(`${window.location.origin}/#invite=${encodeURIComponent(invitation.token)}`);
+  async function copyAccessLink() {
+    if (!accessLink) return;
+    await navigator.clipboard.writeText(accessLink.url);
+    setMessage(`${accessLink.label} wurde kopiert.`);
   }
 
-  async function copyInvitation() {
-    await navigator.clipboard.writeText(invitationUrl);
-    setMessage("Einladungslink wurde kopiert.");
-  }
+  const visibleAuthState: AuthState = !hydrated
+    ? "checking"
+    : resetToken
+      ? "resetting"
+      : invitationToken && authState !== "authenticated"
+        ? "registering"
+        : authState;
 
-  if (authState === "checking") {
+  if (visibleAuthState === "checking") {
     return <main className="authShell"><p className="hint" role="status">Zugriff wird geprüft …</p></main>;
   }
 
-  if (authState === "anonymous" || authState === "registering") {
-    const registering = authState === "registering";
+  if (visibleAuthState === "anonymous" || visibleAuthState === "registering" || visibleAuthState === "resetting") {
+    const registering = visibleAuthState === "registering";
+    const resetting = visibleAuthState === "resetting";
     return (
       <main className="authShell">
         <section className="loginPanel" aria-labelledby="login-heading">
           <p className="eyebrow">ATHLETICA LOG</p>
-          <h1 id="login-heading">{registering ? "Konto einrichten" : "Anmelden"}</h1>
+          <h1 id="login-heading">{registering ? "Konto einrichten" : resetting ? "Passwort zurücksetzen" : "Anmelden"}</h1>
           <p className="intro">{registering
             ? "Wähle deine persönlichen Zugangsdaten. Die Einladung kann nur einmal verwendet werden."
+            : resetting
+              ? "Wähle ein neues Passwort. Der Link kann nur einmal verwendet werden."
             : "Melde dich an, um deine Trainingsdaten zu öffnen."}</p>
-          <form onSubmit={registering ? register : login}>
-            <label>Benutzername<input required minLength={3} maxLength={32} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
-            <label>Passwort<input required minLength={registering ? 12 : 1} type="password" autoComplete={registering ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            {registering && <label>Passwort wiederholen<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>}
+          <form onSubmit={registering ? register : resetting ? resetPassword : login}>
+            {!resetting && <label>Benutzername<input required minLength={3} maxLength={32} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>}
+            <label>{resetting ? "Neues Passwort" : "Passwort"}<input required minLength={registering || resetting ? 12 : 1} type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            {(registering || resetting) && <label>{resetting ? "Neues Passwort wiederholen" : "Passwort wiederholen"}<input required minLength={12} type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} /></label>}
             {message && <p className="message" role="alert">{message}</p>}
-            <button type="submit">{registering ? "Konto erstellen" : "Anmelden"}</button>
+            <button type="submit">{registering ? "Konto erstellen" : resetting ? "Passwort speichern" : "Anmelden"}</button>
           </form>
-          {registering && <button className="authAlternative" type="button" onClick={() => setAuthState("anonymous")}>Zur Anmeldung</button>}
+          {(registering || resetting) && <button className="authAlternative" type="button" onClick={async () => {
+            if (resetting) await apiFetch("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+            clearUrlFragment();
+            setMessage("");
+            setAuthState("anonymous");
+          }}>Zur Anmeldung</button>}
         </section>
       </main>
     );
@@ -175,13 +222,13 @@ export default function AuthGate() {
       {accountOpen && user && <AccountPanel
         user={user}
         onClose={() => setAccountOpen(false)}
-        onCreateInvitation={createInvitation}
+        onAccessLink={(link) => setAccessLink(link)}
         onPasswordChanged={passwordChanged}
       />}
-      {invitationUrl && <section className="inviteBanner" aria-labelledby="invite-heading">
-        <div><p className="step">TESTZUGANG</p><h2 id="invite-heading">Einladung ist 7 Tage gültig</h2></div>
-        <label>Einladungslink<input aria-label="Einladungslink" readOnly value={invitationUrl} /></label>
-        <div className="actionGroup"><button type="button" onClick={copyInvitation}>Link kopieren</button><button className="secondary" type="button" onClick={() => setInvitationUrl("")}>Schließen</button></div>
+      {accessLink && <section className="inviteBanner" aria-labelledby="access-link-heading">
+        <div><p className="step">SICHERER LINK</p><h2 id="access-link-heading">{accessLink.heading}</h2></div>
+        <label>{accessLink.label}<input aria-label={accessLink.label} readOnly value={accessLink.url} /></label>
+        <div className="actionGroup"><button type="button" onClick={copyAccessLink}>Link kopieren</button><button className="secondary" type="button" onClick={() => setAccessLink(null)}>Schließen</button></div>
       </section>}
       {message && authState === "authenticated" && <p className="message navMessage" role="status">{message}</p>}
       <header>

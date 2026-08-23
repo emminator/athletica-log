@@ -42,8 +42,9 @@ Das Projekt enthält ein professionelles Grundgerüst und den ersten durchgängi
 Übungen können angelegt und Trainingseinheiten mit mehreren Sätzen, Gewicht, Wiederholungen und
 RPE gespeichert werden. Einladungsbasierte Benutzerkonten trennen Übungen und Trainingsdaten
 konsequent pro Person. Nutzer können ihr Passwort selbst ändern; Administratoren können Testkonten
-deaktivieren, ohne deren Trainingsdaten zu löschen. Trainingshistorie, Diagramme und Planung folgen
-in kleinen, testbaren Schritten.
+deaktivieren, offene Einladungen widerrufen und zeitlich begrenzte Einmal-Links zum Zurücksetzen
+eines Tester-Passworts erstellen, ohne Trainingsdaten zu löschen. Trainingshistorie, Diagramme und
+Planung folgen in kleinen, testbaren Schritten.
 
 Beim Start wendet das Backend ausstehende Datenbankmigrationen automatisch an. Manuell lässt sich
 der aktuelle Stand mit `docker compose exec backend alembic current` kontrollieren.
