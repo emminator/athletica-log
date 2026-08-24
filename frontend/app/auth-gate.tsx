@@ -84,7 +84,7 @@ export default function AuthGate() {
       body: JSON.stringify({ username, password }),
     }).catch(() => null);
     if (!response?.ok) {
-      setMessage(t.auth.invalidLogin);
+      setMessage(response?.status === 429 ? t.auth.tooManyLoginAttempts : t.auth.invalidLogin);
       return;
     }
     setPassword("");

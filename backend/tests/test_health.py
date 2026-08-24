@@ -139,6 +139,44 @@ def test_cache_policy_has_explicit_route_boundaries(client: TestClient) -> None:
     assert "cache-control" not in client.get("/api/v1/authentication").headers
 
 
+def test_cross_origin_writes_are_rejected_with_request_id(
+    client: TestClient, monkeypatch
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "backend_cors_origins", "https://athletica.example")
+
+    rejected_origin = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "https://attacker.example"},
+        json={},
+    )
+    rejected_fetch = client.post(
+        "/api/v1/auth/login",
+        headers={
+            "Origin": "https://athletica.example",
+            "Sec-Fetch-Site": "cross-site",
+        },
+        json={},
+    )
+    allowed_origin = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "https://athletica.example"},
+        json={},
+    )
+
+    assert rejected_origin.status_code == 403
+    assert rejected_origin.json() == {"detail": "Cross-origin request rejected"}
+    assert rejected_origin.headers["x-request-id"]
+    assert rejected_fetch.status_code == 403
+    assert allowed_origin.status_code == 422
+
+
+def test_non_browser_clients_without_origin_headers_remain_supported(
+    client: TestClient,
+) -> None:
+    assert client.post("/api/v1/auth/login", json={}).status_code == 422
+
+
 def test_api_identity(client: TestClient) -> None:
     response = client.get("/api/v1")
     assert response.json()["name"] == "Athletica Log API"

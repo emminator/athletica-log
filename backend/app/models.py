@@ -50,6 +50,15 @@ class UserSession(Base):
     user: Mapped[User] = relationship()
 
 
+class LoginThrottle(Base):
+    __tablename__ = "login_throttles"
+    identifier_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class Invitation(Base):
     __tablename__ = "invitations"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

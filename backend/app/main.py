@@ -17,6 +17,7 @@ from app.observability import (
     log_request,
     should_log_request,
 )
+from app.request_security import is_trusted_browser_request
 
 settings = get_settings()
 app = FastAPI(
@@ -41,7 +42,13 @@ app.include_router(api_router)
 @app.middleware("http")
 async def observe_request(request: Request, call_next) -> Response:
     initialize_request(request)
-    response = await call_next(request)
+    if is_trusted_browser_request(request, settings):
+        response = await call_next(request)
+    else:
+        response = JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": "Cross-origin request rejected"},
+        )
     add_response_headers(request, response, settings)
     if should_log_request(request, response.status_code):
         log_request(request, response.status_code)
