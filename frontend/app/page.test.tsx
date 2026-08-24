@@ -227,6 +227,24 @@ describe("Home", () => {
     }));
   });
 
+  it("explains when repeated sign-in attempts are temporarily throttled", async () => {
+    const fetchMock = vi.fn((url: string) => Promise.resolve({
+      ok: false,
+      status: url.endsWith("/auth/session") ? 401 : 429,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    expect(await screen.findByRole("heading", { name: "Anmelden" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Benutzername" }), { target: { value: "athletica" } });
+    fireEvent.change(screen.getByLabelText("Passwort"), { target: { value: "a-strong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anmelden" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Zu viele Anmeldeversuche. Bitte warte einige Minuten und versuche es erneut.",
+    );
+  });
+
   it("creates an account from a one-time invitation", async () => {
     window.history.replaceState({}, "", "/#invite=invitation-token-with-enough-characters-123");
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {

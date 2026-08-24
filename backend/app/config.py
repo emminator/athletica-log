@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     auth_password_hash: str = ""
     session_max_age_seconds: int = 60 * 60 * 24 * 30
     session_cookie_secure: bool = False
+    login_max_attempts: int = Field(default=5, ge=2, le=100)
+    login_attempt_window_seconds: int = Field(default=15 * 60, ge=60, le=24 * 60 * 60)
+    login_lockout_seconds: int = Field(default=15 * 60, ge=60, le=24 * 60 * 60)
     hsts_enabled: bool = False
     static_files_dir: str = ""
     docs_enabled: bool = True

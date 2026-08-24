@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import SESSION_COOKIE, hash_password, token_hash
 from app.config import get_settings
-from app.models import Invitation, PasswordReset, User, UserSession
+from app.login_security import identifier_hash
+from app.models import Invitation, LoginThrottle, PasswordReset, User, UserSession
 
 
 def enable_authentication(monkeypatch) -> None:
@@ -78,6 +79,63 @@ def test_expired_session_is_rejected(client: TestClient, db: Session, monkeypatc
     client.cookies.set(SESSION_COOKIE, raw_token)
 
     assert client.get("/api/v1/auth/session").status_code == 401
+
+
+@pytest.mark.parametrize("username", ["tester", "unknown-user"])
+def test_repeated_failed_logins_are_temporarily_throttled_without_storing_usernames(
+    client: TestClient, db: Session, monkeypatch, username: str
+) -> None:
+    enable_authentication(monkeypatch)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "login_max_attempts", 3)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 120)
+    add_user(db, "tester", "tester-password-123")
+
+    responses = [
+        client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "wrong-password"},
+        )
+        for _ in range(3)
+    ]
+
+    assert [response.status_code for response in responses] == [401, 401, 429]
+    assert responses[-1].headers["retry-after"] == "120"
+    throttle = db.get(LoginThrottle, identifier_hash(username))
+    assert throttle is not None
+    assert throttle.identifier_hash != username
+    assert throttle.failed_attempts == 3
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": "tester-password-123"},
+    ).status_code == 429
+
+
+def test_successful_login_clears_expired_throttle(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    enable_authentication(monkeypatch)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "login_max_attempts", 2)
+    add_user(db, "tester", "tester-password-123")
+    for _ in range(2):
+        client.post(
+            "/api/v1/auth/login",
+            json={"username": "tester", "password": "wrong-password"},
+        )
+
+    throttle = db.get(LoginThrottle, identifier_hash("tester"))
+    assert throttle is not None
+    throttle.blocked_until = datetime.now(UTC) - timedelta(seconds=1)
+    db.commit()
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tester", "password": "tester-password-123"},
+    )
+
+    assert response.status_code == 200
+    assert db.get(LoginThrottle, identifier_hash("tester")) is None
 
 
 def test_admin_invitation_registers_user_once(

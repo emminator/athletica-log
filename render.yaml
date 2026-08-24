@@ -25,6 +25,12 @@ services:
         sync: false
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: LOGIN_MAX_ATTEMPTS
+        value: "5"
+      - key: LOGIN_ATTEMPT_WINDOW_SECONDS
+        value: "900"
+      - key: LOGIN_LOCKOUT_SECONDS
+        value: "900"
       - key: HSTS_ENABLED
         value: "true"
       - key: DOCS_ENABLED

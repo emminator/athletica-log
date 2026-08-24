@@ -16,6 +16,12 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import get_db
+from app.login_security import (
+    clear_failed_logins,
+    lock_login_identifier,
+    record_failed_login,
+    retry_after_seconds,
+)
 from app.models import Invitation, PasswordReset, User, UserSession
 
 SESSION_COOKIE = "athletica_session"
@@ -134,6 +140,9 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+
+
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -241,13 +250,31 @@ def login(
     db: DatabaseSession,
     settings: SettingsDependency,
 ) -> SessionRead:
+    lock_login_identifier(db, payload.username)
+    retry_after = retry_after_seconds(db, payload.username)
+    if retry_after is not None:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = db.scalar(select(User).where(User.username == payload.username))
-    if (
-        user is None
-        or not user.is_active
-        or not verify_password(payload.password, user.password_hash)
-    ):
+    password_hash = (
+        user.password_hash if user is not None and user.is_active else DUMMY_PASSWORD_HASH
+    )
+    credentials_valid = verify_password(payload.password, password_hash)
+    if user is None or not user.is_active or not credentials_valid:
+        retry_after = record_failed_login(db, payload.username, settings)
+        if retry_after is not None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many login attempts",
+                headers={"Retry-After": str(retry_after)},
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    clear_failed_logins(db, payload.username)
     set_session_cookie(response, user, db, settings)
     return session_read(user)
 

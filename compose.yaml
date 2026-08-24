@@ -29,6 +29,9 @@ services:
       AUTH_USERNAME: ${AUTH_USERNAME:-athletica}
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_ATTEMPT_WINDOW_SECONDS: ${LOGIN_ATTEMPT_WINDOW_SECONDS:-900}
+      LOGIN_LOCKOUT_SECONDS: ${LOGIN_LOCKOUT_SECONDS:-900}
       HSTS_ENABLED: ${HSTS_ENABLED:-false}
       DOCS_ENABLED: ${DOCS_ENABLED:-true}
     command: ["/bin/sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]

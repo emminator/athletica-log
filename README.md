@@ -127,6 +127,7 @@ render.yaml          Production infrastructure blueprint
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Portfolio demo readiness](docs/DEMO_READINESS.md)
 - [Five-minute reviewer walkthrough](docs/REVIEWER_GUIDE.md)
+- [Security policy and private reporting](SECURITY.md)
 
 ## Current scope and next steps
 

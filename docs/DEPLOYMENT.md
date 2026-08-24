@@ -10,6 +10,11 @@ von FastAPI unter derselben Domain wie die API ausgeliefert.
 - Passwörter liegen nur als gesalzene scrypt-Hashes in PostgreSQL, niemals im Repository.
 - Sitzungen verwenden zufällige, nur gehasht gespeicherte Tokens. Der Browser erhält ausschließlich
   ein HttpOnly-, Secure- und SameSite-Strict-Cookie.
+- Fehlgeschlagene Anmeldungen werden serverseitig und instanzübergreifend pro Benutzerkennung
+  gedrosselt. Auch unbekannte Kennungen durchlaufen denselben Passwortprüfpfad, damit Antwortzeiten
+  keine gültigen Benutzernamen verraten.
+- Schreibende Browser-Anfragen mit fremder Origin oder `Sec-Fetch-Site: cross-site` werden
+  abgewiesen. Kommandozeilen- und Betriebszugriffe ohne Browser-Herkunftsheader bleiben möglich.
 - HSTS wird produktiv unabhängig von der Cookie-Konfiguration über `HSTS_ENABLED` aktiviert.
 - Übungen und Trainings tragen eine Benutzer-ID; jede API-Abfrage erzwingt den angemeldeten Besitzer.
 - Neue Konten entstehen nur über zeitlich begrenzte, einmal verwendbare Einladungen eines Admins.
@@ -74,7 +79,7 @@ Wiederherstellungsweg.
 ## Ersteinrichtung
 
 1. In Render ein Konto beziehungsweise einen Workspace mit GitHub verbinden.
-2. Ein neues Blueprint aus dem privaten Repository `emminator/athletica-log` erstellen.
+2. Ein neues Blueprint aus dem Repository `emminator/athletica-log` erstellen.
 3. Die von `render.yaml` vorgeschlagenen Ressourcen und Kosten kontrollieren.
 4. Den zuvor erzeugten Passwort-Hash als `AUTH_PASSWORD_HASH` eintragen.
 5. Den Blueprint anlegen und den ersten erfolgreichen Deploy abwarten.
