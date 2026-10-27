@@ -1,4 +1,5 @@
-FROM node:22-alpine AS base
+FROM node:22.23.4-alpine AS base
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./

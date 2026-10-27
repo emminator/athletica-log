@@ -21,7 +21,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
       - name: Start development stack
-        run: docker compose up --build --detach
+        run: |
+          docker compose build --pull
+          docker compose up --detach
       - name: Ruff
         run: docker compose exec -T backend ruff check --no-cache .
       - name: Pytest
@@ -44,7 +46,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
       - name: Build production image
-        run: docker build --tag athletica-log:${{ github.sha }} .
+        run: docker build --pull --tag athletica-log:${{ github.sha }} .
+      - name: Verify production certificate stores
+        run: >-
+          docker run --rm --volume "${{ github.workspace }}/scripts:/checks:ro"
+          athletica-log:${{ github.sha }} python /checks/verify-ca-security.py
       - name: Start production image
         run: >-
           docker run --detach --name athletica-production-test --publish 8000:8000

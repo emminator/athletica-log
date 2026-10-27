@@ -3,6 +3,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends ca-certificates \
+    && update-ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system app && adduser --system --ingroup app app
 COPY pyproject.toml README.md ./
 
