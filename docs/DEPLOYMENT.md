@@ -116,6 +116,20 @@ GitHub Actions und Render der Fall ist. Zertifikatsprüfungen werden niemals dea
 
 ## Betrieb
 
+### Sicherheitsupdates für Images und Zertifikate
+
+Nach Laufzeit- oder CA-Sicherheitsmeldungen die Basisimages mit `docker compose build --pull --no-cache`
+und das Produktionsimage mit `docker build --pull --no-cache -t athletica-log:security-check .`
+frisch bauen. Node.js muss mindestens die gepatchte Version 22.23.4 verwenden; Python benötigt
+`certifi>=2026.10.19`. Die Dockerfiles aktualisieren zusätzlich die Systempakete und CA-Zertifikate.
+Ein Containerneustart allein aktualisiert diese Bestandteile nicht.
+
+`scripts/verify-ca-security.py` prüft normales HTTPS und die Ablehnung beider von Render genannten
+eMudhra-Testendpunkte jeweils mit dem System- und Certifi-Zertifikatsspeicher. Die CI führt diese
+Prüfung im fertigen Produktionsimage aus. Netzwerkfehler gelten dabei nicht als erfolgreicher
+Nachweis. Für die abschließende Kontrolle dieselbe Prüfung auch in der laufenden Render-Umgebung
+ausführen; ein lokaler erfolgreicher Test beweist deren Zustand nicht.
+
 - Neue Änderungen werden lokal entwickelt und vollständig über Docker geprüft.
 - Produktive Geheimnisse werden ausschließlich in Render verwaltet.
 - Datenbankmigrationen müssen abwärtskompatibel sein und vor dem Merge getestet werden.
